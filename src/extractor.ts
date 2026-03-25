@@ -51,7 +51,11 @@ async function summarizeChunk(chunk: string, config: ProviderConfig): Promise<st
 
 async function callFacetLlm(sessionId: string, text: string, config: ProviderConfig): Promise<Facet> {
   const raw = await callLlm(config, FACET_SYSTEM_PROMPT, `sessionId: ${sessionId}\n\n${text}`)
-  return JSON.parse(raw) as Facet
+  try {
+    return JSON.parse(raw) as Facet
+  } catch (e) {
+    throw new Error(`LLM returned invalid JSON for session ${sessionId}: ${e}`)
+  }
 }
 
 export async function extractFacet(session: Session, config: ProviderConfig): Promise<Facet> {
@@ -61,7 +65,11 @@ export async function extractFacet(session: Session, config: ProviderConfig): Pr
   if (fs.existsSync(cachePath)) {
     const stat = fs.statSync(cachePath)
     if (stat.mtimeMs >= session.updatedAt) {
-      return JSON.parse(fs.readFileSync(cachePath, 'utf-8') as string) as Facet
+      try {
+        return JSON.parse(fs.readFileSync(cachePath, 'utf-8') as string) as Facet
+      } catch {
+        // Cache corrupted, fall through to regenerate
+      }
     }
   }
 
