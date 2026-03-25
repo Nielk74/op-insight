@@ -1,7 +1,7 @@
 import * as fs from 'node:fs'
 import * as os from 'node:os'
 import * as path from 'node:path'
-import type { Session, Facet, ProviderConfig } from './types.js'
+import type { Session, Facet } from './types.js'
 import { callLlm } from './llm.js'
 
 export const CHUNK_SIZE = 25_000
@@ -41,16 +41,15 @@ const FACET_SYSTEM_PROMPT = `You are analyzing a coding session transcript. Extr
 
 Return ONLY valid JSON, no markdown fences.`
 
-async function summarizeChunk(chunk: string, config: ProviderConfig): Promise<string> {
+async function summarizeChunk(chunk: string): Promise<string> {
   return callLlm(
-    config,
     'Summarize this coding session excerpt in 3-5 sentences, preserving key actions, tools, and any friction points.',
     chunk
   )
 }
 
-async function callFacetLlm(sessionId: string, text: string, config: ProviderConfig): Promise<Facet> {
-  const raw = await callLlm(config, FACET_SYSTEM_PROMPT, `sessionId: ${sessionId}\n\n${text}`)
+async function callFacetLlm(sessionId: string, text: string): Promise<Facet> {
+  const raw = await callLlm(FACET_SYSTEM_PROMPT, `sessionId: ${sessionId}\n\n${text}`)
   try {
     return JSON.parse(raw) as Facet
   } catch (e) {
@@ -58,7 +57,7 @@ async function callFacetLlm(sessionId: string, text: string, config: ProviderCon
   }
 }
 
-export async function extractFacet(session: Session, config: ProviderConfig): Promise<Facet> {
+export async function extractFacet(session: Session): Promise<Facet> {
   const cachePath = getCachePath(session.id)
 
   // Return cached facet if fresh
@@ -84,11 +83,11 @@ export async function extractFacet(session: Session, config: ProviderConfig): Pr
     for (let i = 0; i < serialized.length; i += CHUNK_SIZE) {
       chunks.push(serialized.slice(i, i + CHUNK_SIZE))
     }
-    const summaries = await Promise.all(chunks.map((c) => summarizeChunk(c, config)))
+    const summaries = await Promise.all(chunks.map((c) => summarizeChunk(c)))
     textForLlm = summaries.join('\n\n')
   }
 
-  const facet = await callFacetLlm(session.id, textForLlm, config)
+  const facet = await callFacetLlm(session.id, textForLlm)
 
   // Write cache
   fs.mkdirSync(getCacheDir(), { recursive: true })

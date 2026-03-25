@@ -2,7 +2,6 @@ import { readSessions } from './reader.js'
 import { extractFacet } from './extractor.js'
 import { synthesizeReport } from './aggregator.js'
 import { saveAndOpenReport } from './reporter.js'
-import { readOpencodeConfig } from './config.js'
 
 function parseArgs(): { days: number } {
   const args = process.argv.slice(2)
@@ -21,14 +20,6 @@ function parseArgs(): { days: number } {
 async function main() {
   const { days } = parseArgs()
 
-  let config
-  try {
-    config = readOpencodeConfig()
-  } catch (e) {
-    console.error(`Error: ${(e as Error).message}`)
-    process.exit(1)
-  }
-
   process.stderr.write(`Reading sessions from opencode.db... `)
   let sessions
   try {
@@ -45,13 +36,11 @@ async function main() {
   }
 
   process.stderr.write(`Extracting facets... `)
-  const facets = await Promise.all(
-    sessions.map((s) => extractFacet(s, config))
-  )
+  const facets = await Promise.all(sessions.map((s) => extractFacet(s)))
   process.stderr.write(`(${facets.length} processed)\n`)
 
   process.stderr.write(`Synthesizing report...\n`)
-  const report = await synthesizeReport(facets, days, config)
+  const report = await synthesizeReport(facets, days)
 
   const outPath = saveAndOpenReport(report)
   process.stderr.write(`Report saved to ${outPath}\n`)

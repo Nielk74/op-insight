@@ -54,8 +54,3 @@ export type InsightReport = {
   featureRecommendations: string[]
 }
 
-export type ProviderConfig = {
-  provider: 'anthropic' | 'openai'
-  model: string
-  apiKey: string
-}

@@ -1,17 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { synthesizeReport } from '../src/aggregator.js'
-import type { Facet, ProviderConfig, InsightReport } from '../src/types.js'
+import type { Facet, InsightReport } from '../src/types.js'
 
 vi.mock('../src/llm.js', () => ({
   callLlm: vi.fn(),
 }))
 import { callLlm } from '../src/llm.js'
-
-const mockConfig: ProviderConfig = {
-  provider: 'anthropic',
-  model: 'claude-haiku-4-5',
-  apiKey: 'test-key',
-}
 
 const mockFacets: Facet[] = [
   {
@@ -52,7 +46,7 @@ describe('synthesizeReport', () => {
   it('calls LLM with all facets and returns parsed report', async () => {
     vi.mocked(callLlm).mockResolvedValue(JSON.stringify(mockReport))
 
-    const result = await synthesizeReport(mockFacets, 30, mockConfig)
+    const result = await synthesizeReport(mockFacets, 30)
 
     expect(callLlm).toHaveBeenCalledOnce()
     expect(result.sessionCount).toBe(1)
@@ -62,7 +56,7 @@ describe('synthesizeReport', () => {
   it('includes periodDays and sessionCount in report', async () => {
     vi.mocked(callLlm).mockResolvedValue(JSON.stringify(mockReport))
 
-    const result = await synthesizeReport(mockFacets, 90, mockConfig)
+    const result = await synthesizeReport(mockFacets, 90)
 
     expect(result.periodDays).toBe(90) // overridden with ground-truth value
     expect(result.sessionCount).toBe(1) // overridden with ground-truth value

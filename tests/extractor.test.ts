@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { extractFacet, serializeSession, CHUNK_SIZE } from '../src/extractor.js'
-import type { Session, ProviderConfig } from '../src/types.js'
+import type { Session } from '../src/types.js'
 
 vi.mock('../src/llm.js', () => ({
   callLlm: vi.fn(),
@@ -19,12 +19,6 @@ vi.mock('node:fs', async (importOriginal) => {
   }
 })
 import * as fs from 'node:fs'
-
-const mockConfig: ProviderConfig = {
-  provider: 'anthropic',
-  model: 'claude-haiku-4-5',
-  apiKey: 'test-key',
-}
 
 const mockSession: Session = {
   id: 'ses_abc',
@@ -66,7 +60,7 @@ describe('extractFacet', () => {
     vi.mocked(fs.statSync).mockReturnValue({ mtimeMs: mockSession.updatedAt + 1000 } as fs.Stats)
     vi.mocked(fs.readFileSync).mockReturnValue(JSON.stringify(mockFacet))
 
-    const result = await extractFacet(mockSession, mockConfig)
+    const result = await extractFacet(mockSession)
 
     expect(result).toEqual(mockFacet)
     expect(callLlm).not.toHaveBeenCalled()
@@ -76,7 +70,7 @@ describe('extractFacet', () => {
     vi.mocked(fs.existsSync).mockReturnValue(false)
     vi.mocked(callLlm).mockResolvedValue(JSON.stringify(mockFacet))
 
-    const result = await extractFacet(mockSession, mockConfig)
+    const result = await extractFacet(mockSession)
 
     expect(callLlm).toHaveBeenCalledOnce()
     expect(result.sessionId).toBe('ses_abc')
@@ -88,7 +82,7 @@ describe('extractFacet', () => {
     vi.mocked(fs.statSync).mockReturnValue({ mtimeMs: mockSession.updatedAt - 1000 } as fs.Stats)
     vi.mocked(callLlm).mockResolvedValue(JSON.stringify(mockFacet))
 
-    await extractFacet(mockSession, mockConfig)
+    await extractFacet(mockSession)
 
     expect(callLlm).toHaveBeenCalledOnce()
   })

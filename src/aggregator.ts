@@ -1,4 +1,4 @@
-import type { Facet, InsightReport, ProviderConfig } from './types.js'
+import type { Facet, InsightReport } from './types.js'
 import { callLlm } from './llm.js'
 
 const SYNTHESIS_SYSTEM_PROMPT = `You are analyzing aggregated data from multiple coding sessions.
@@ -16,8 +16,7 @@ Be specific and actionable. The config suggestions should be copy-pasteable JSON
 
 export async function synthesizeReport(
   facets: Facet[],
-  periodDays: number,
-  config: ProviderConfig
+  periodDays: number
 ): Promise<InsightReport> {
   const payload = {
     periodDays,
@@ -26,7 +25,6 @@ export async function synthesizeReport(
   }
 
   const raw = await callLlm(
-    config,
     SYNTHESIS_SYSTEM_PROMPT,
     JSON.stringify(payload, null, 2)
   )

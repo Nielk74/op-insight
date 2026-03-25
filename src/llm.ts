@@ -1,39 +1,22 @@
-import type { ProviderConfig } from './types.js'
+import { spawnSync } from 'node:child_process'
 
 export async function callLlm(
-  config: ProviderConfig,
   systemPrompt: string,
   userMessage: string
 ): Promise<string> {
-  if (config.provider === 'anthropic') {
-    const { default: Anthropic } = await import('@anthropic-ai/sdk')
-    const client = new Anthropic({ apiKey: config.apiKey })
-    const response = await client.messages.create({
-      model: config.model,
-      max_tokens: 4096,
-      system: systemPrompt,
-      messages: [{ role: 'user', content: userMessage }],
-    })
-    const block = response.content[0]
-    if (block.type !== 'text') throw new Error('Unexpected response type from Anthropic')
-    return block.text
+  const prompt = `${systemPrompt}\n\n${userMessage}`
+
+  const result = spawnSync('opencode', ['run', '--print', prompt], {
+    encoding: 'utf-8',
+    maxBuffer: 10 * 1024 * 1024,
+  })
+
+  if (result.error) {
+    throw new Error(`Failed to run opencode: ${result.error.message}`)
+  }
+  if (result.status !== 0) {
+    throw new Error(`opencode exited with code ${result.status}: ${result.stderr}`)
   }
 
-  if (config.provider === 'openai') {
-    const { default: OpenAI } = await import('openai')
-    const client = new OpenAI({ apiKey: config.apiKey })
-    const response = await client.chat.completions.create({
-      model: config.model,
-      max_tokens: 4096,
-      messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: userMessage },
-      ],
-    })
-    const content = response.choices[0]?.message?.content
-    if (!content) throw new Error('Empty response from OpenAI')
-    return content
-  }
-
-  throw new Error(`Unsupported provider: ${config.provider}`)
+  return result.stdout.trim()
 }
