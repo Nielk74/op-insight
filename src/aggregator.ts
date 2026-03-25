@@ -1,0 +1,35 @@
+import type { Facet, InsightReport, ProviderConfig } from './types.js'
+import { callLlm } from './llm.js'
+
+const SYNTHESIS_SYSTEM_PROMPT = `You are analyzing aggregated data from multiple coding sessions.
+Produce an InsightReport as valid JSON (no markdown fences) with these fields:
+- generatedAt: ISO timestamp string
+- periodDays: number
+- sessionCount: number
+- projects: Array<{ name, sessionCount, description }>
+- workflowInsights: { strengths: string[], frictionPoints: string[], behavioralProfile: string }
+- codeQualityInsights: { recurringPatterns: string[], recommendations: string[] }
+- opencodeConfigSuggestions: Array<{ description: string, rule: string }> (ready-to-paste opencode.json snippets)
+- featureRecommendations: string[] (opencode features the user isn't leveraging)
+
+Be specific and actionable. The config suggestions should be copy-pasteable JSON snippets.`
+
+export async function synthesizeReport(
+  facets: Facet[],
+  periodDays: number,
+  config: ProviderConfig
+): Promise<InsightReport> {
+  const payload = {
+    periodDays,
+    sessionCount: facets.length,
+    facets,
+  }
+
+  const raw = await callLlm(
+    config,
+    SYNTHESIS_SYSTEM_PROMPT,
+    JSON.stringify(payload, null, 2)
+  )
+
+  return JSON.parse(raw) as InsightReport
+}
