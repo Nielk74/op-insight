@@ -31,5 +31,13 @@ export async function synthesizeReport(
     JSON.stringify(payload, null, 2)
   )
 
-  return JSON.parse(raw) as InsightReport
+  let report: InsightReport
+  try {
+    report = JSON.parse(raw) as InsightReport
+  } catch (e) {
+    throw new Error(`LLM returned invalid JSON for synthesis: ${e}`)
+  }
+  report.periodDays = periodDays
+  report.sessionCount = facets.length
+  return report
 }

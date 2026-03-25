@@ -64,6 +64,7 @@ describe('synthesizeReport', () => {
 
     const result = await synthesizeReport(mockFacets, 90, mockConfig)
 
-    expect(result.periodDays).toBe(30) // comes from LLM response in mock
+    expect(result.periodDays).toBe(90) // overridden with ground-truth value
+    expect(result.sessionCount).toBe(1) // overridden with ground-truth value
   })
 })

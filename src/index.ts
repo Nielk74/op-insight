@@ -45,15 +45,8 @@ async function main() {
   }
 
   process.stderr.write(`Extracting facets... `)
-  let cached = 0
-  let fresh = 0
   const facets = await Promise.all(
-    sessions.map(async (s) => {
-      const facet = await extractFacet(s, config)
-      // Heuristic: if facet was returned very fast it was cached
-      cached++ // simplified: count all for now
-      return facet
-    })
+    sessions.map((s) => extractFacet(s, config))
   )
   process.stderr.write(`(${facets.length} processed)\n`)
 
