@@ -4,8 +4,6 @@
 
 Inspired by Claude Code's `/insights` command.
 
-![Report preview showing project summary, workflow insights, and config suggestions](https://github.com/Nielk74/op-insight/raw/master/docs/preview-placeholder.png)
-
 ---
 
 ## What it does
