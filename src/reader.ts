@@ -115,7 +115,7 @@ export function readSessionFacets(
       const output = pdata.state?.output ?? ''
       sess.toolParts.push({ tool: pdata.tool, hasError: ERROR_RE.test(output) })
       if (FILE_TOOLS.has(pdata.tool.toLowerCase())) {
-        const fp = pdata.state?.input?.file_path ?? pdata.state?.input?.path
+        const fp = pdata.state?.input?.filePath ?? pdata.state?.input?.file_path ?? pdata.state?.input?.path
         if (fp) sess.filesTouched.add(fp)
       }
     }

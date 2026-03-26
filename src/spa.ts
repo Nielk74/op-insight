@@ -281,9 +281,10 @@ export const SPA_SCRIPT = `
     var avgWaste = sessions.length ? (sessions.reduce(function(s,f){return s+f.wasteScore;},0)/sessions.length).toFixed(1) : '0';
     var allTools = new Set(sessions.flatMap ? sessions.flatMap(function(s){return s.toolsUsed;}) : []);
     var avgFiles = sessions.length ? (sessions.reduce(function(s,f){return s+(f.filesTouched||[]).length;},0)/sessions.length).toFixed(1) : '0';
+    var freqVal = fp.sessionFrequency ? (fp.sessionFrequency * 10).toFixed(1) : '0';
     var descs = [
       'Autonomy: avg ' + avgTurnDepth + ' turns per session (higher = you let it run longer)',
-      'Frequency: avg sessions per week over the last 90 days',
+      'Frequency: avg ' + freqVal + ' sessions per week over the last 90 days',
       'Iteration: avg waste score ' + avgWaste + '/10 (lower is cleaner)',
       'Tool diversity: ' + allTools.size + ' unique tools used this period',
       'Output density: avg ' + avgFiles + ' files touched per session',
@@ -337,9 +338,15 @@ export const SPA_SCRIPT = `
       wkSessions.forEach(function(s, idx) {
         var dot = document.createElement('div');
         dot.className = 'tl-dot';
+        // Within a week row, spread by day-of-week (0=Mon … 6=Sun → 0%–100%)
+        var d = new Date(s.date);
+        var dow = (d.getUTCDay() + 6) % 7; // Mon=0 … Sun=6
+        var basePct = (dow / 6) * 90 + 5;
+        // Jitter same-day dots slightly so they don't overlap
+        var sameDayIdx = wkSessions.filter(function(x){ return x.date === s.date; }).indexOf(s);
         var pct = singleDay
           ? (wkSessions.length === 1 ? 50 : (idx / (wkSessions.length - 1)) * 90 + 5)
-          : ((new Date(s.date).getTime() - minMs) / span) * 94 + 3;
+          : basePct + sameDayIdx * 2.5;
         var size = 10 + Math.min(s.turnDepth || 0, 6) * 2;
         dot.style.left = pct + '%';
         dot.style.width = size + 'px';
@@ -380,8 +387,16 @@ export const SPA_SCRIPT = `
   }
 
   function renderCards() {
-    var sessions = data.current.sessions.slice().sort(function(a,b){ return b.date.localeCompare(a.date); });
+    var allSessions = data.current.sessions.slice().sort(function(a,b){ return b.date.localeCompare(a.date); });
+    var CAP = 50;
+    var sessions = allSessions.slice(0, CAP);
     var container = document.getElementById('cards-list');
+    if (allSessions.length > CAP) {
+      var note = document.createElement('div');
+      note.className = 'muted';
+      note.textContent = 'Showing ' + CAP + ' of ' + allSessions.length + ' sessions (most recent first)';
+      container.appendChild(note);
+    }
     sessions.forEach(function(s) {
       var card = document.createElement('div');
       card.className = 'sess-card';

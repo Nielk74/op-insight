@@ -12583,7 +12583,7 @@ function readSessionFacets(days, currentSessionId, limit, topic, errorsOnly) {
       const output = pdata.state?.output ?? "";
       sess.toolParts.push({ tool: pdata.tool, hasError: ERROR_RE.test(output) });
       if (FILE_TOOLS.has(pdata.tool.toLowerCase())) {
-        const fp = pdata.state?.input?.file_path ?? pdata.state?.input?.path;
+        const fp = pdata.state?.input?.filePath ?? pdata.state?.input?.file_path ?? pdata.state?.input?.path;
         if (fp) sess.filesTouched.add(fp);
       }
     }
@@ -12972,9 +12972,10 @@ var SPA_SCRIPT = `
     var avgWaste = sessions.length ? (sessions.reduce(function(s,f){return s+f.wasteScore;},0)/sessions.length).toFixed(1) : '0';
     var allTools = new Set(sessions.flatMap ? sessions.flatMap(function(s){return s.toolsUsed;}) : []);
     var avgFiles = sessions.length ? (sessions.reduce(function(s,f){return s+(f.filesTouched||[]).length;},0)/sessions.length).toFixed(1) : '0';
+    var freqVal = fp.sessionFrequency ? (fp.sessionFrequency * 10).toFixed(1) : '0';
     var descs = [
       'Autonomy: avg ' + avgTurnDepth + ' turns per session (higher = you let it run longer)',
-      'Frequency: avg sessions per week over the last 90 days',
+      'Frequency: avg ' + freqVal + ' sessions per week over the last 90 days',
       'Iteration: avg waste score ' + avgWaste + '/10 (lower is cleaner)',
       'Tool diversity: ' + allTools.size + ' unique tools used this period',
       'Output density: avg ' + avgFiles + ' files touched per session',
@@ -13028,9 +13029,15 @@ var SPA_SCRIPT = `
       wkSessions.forEach(function(s, idx) {
         var dot = document.createElement('div');
         dot.className = 'tl-dot';
+        // Within a week row, spread by day-of-week (0=Mon \u2026 6=Sun \u2192 0%\u2013100%)
+        var d = new Date(s.date);
+        var dow = (d.getUTCDay() + 6) % 7; // Mon=0 \u2026 Sun=6
+        var basePct = (dow / 6) * 90 + 5;
+        // Jitter same-day dots slightly so they don't overlap
+        var sameDayIdx = wkSessions.filter(function(x){ return x.date === s.date; }).indexOf(s);
         var pct = singleDay
           ? (wkSessions.length === 1 ? 50 : (idx / (wkSessions.length - 1)) * 90 + 5)
-          : ((new Date(s.date).getTime() - minMs) / span) * 94 + 3;
+          : basePct + sameDayIdx * 2.5;
         var size = 10 + Math.min(s.turnDepth || 0, 6) * 2;
         dot.style.left = pct + '%';
         dot.style.width = size + 'px';
@@ -13071,8 +13078,16 @@ var SPA_SCRIPT = `
   }
 
   function renderCards() {
-    var sessions = data.current.sessions.slice().sort(function(a,b){ return b.date.localeCompare(a.date); });
+    var allSessions = data.current.sessions.slice().sort(function(a,b){ return b.date.localeCompare(a.date); });
+    var CAP = 50;
+    var sessions = allSessions.slice(0, CAP);
     var container = document.getElementById('cards-list');
+    if (allSessions.length > CAP) {
+      var note = document.createElement('div');
+      note.className = 'muted';
+      note.textContent = 'Showing ' + CAP + ' of ' + allSessions.length + ' sessions (most recent first)';
+      container.appendChild(note);
+    }
     sessions.forEach(function(s) {
       var card = document.createElement('div');
       card.className = 'sess-card';
@@ -13254,7 +13269,7 @@ function saveAndOpenReport(report) {
 }
 
 // src/plugin.ts
-var REPORT_SCHEMA_DESC = `JSON string with these fields: generatedAt (ISO timestamp), periodDays (number), sessionCount (number), atAGlance ({workingWell, hindering, quickWins}), behavioralProfile (string), projects ([{name, sessionCount, description}]), topTools ([{name, count}]), workflowInsights ({strengths:[{title,detail}], frictionPoints:[{title,detail,examples:[]}], behavioralProfile}), codeQualityInsights ({recurringPatterns:[], recommendations:[]}), opencodeConfigSuggestions ([{description, rule}]), featureRecommendations ([{title, why}]). Write in second person. Cite specific project names, tool names, and error messages from the data.`;
+var REPORT_SCHEMA_DESC = `JSON string with these fields: generatedAt (ISO timestamp), periodDays (number), sessionCount (MUST match the exact count returned by insights_get_data \u2014 do not invent a different number), atAGlance ({workingWell, hindering, quickWins}), behavioralProfile (string), projects ([{name, sessionCount, description}]), topTools ([{name, count}] \u2014 use ONLY tools that actually appear in the session data), workflowInsights ({strengths:[{title,detail}], frictionPoints:[{title,detail,examples:[]}], behavioralProfile}), codeQualityInsights ({recurringPatterns:[], recommendations:[]}), opencodeConfigSuggestions ([{description, rule}] \u2014 always include a suggestion about the "instructions" field in opencode.json for loading project guidelines like CONTRIBUTING.md or .cursor/rules/*.md), featureRecommendations ([{title, why}]). Write in second person. Cite only real tool names and error patterns from the data.`;
 var SYSTEM_PROMPT_INJECTION = `
 
 ## opencode-insights plugin
@@ -13264,8 +13279,14 @@ When the user's message starts with /insights (or a close variant like "run insi
    - --limit N = max sessions
    - --topic <keyword> = filter by keyword
    - --errors = errors_only mode
-2. Call insights_get_data with those parameters
-3. Analyze the returned session data thoroughly and synthesize a complete InsightReport JSON covering all fields: generatedAt, periodDays, sessionCount, atAGlance (workingWell/hindering/quickWins), behavioralProfile, projects, topTools, workflowInsights (strengths, frictionPoints with examples), codeQualityInsights, opencodeConfigSuggestions, featureRecommendations. Write in second person. Be specific \u2014 cite real project names, tool names, error patterns from the data.
+2. Call insights_get_data with those parameters.
+3. Synthesize the returned data into a complete InsightReport JSON. CRITICAL rules:
+   - Use the EXACT sessionCount from the data (the "sessionCount" field in the response). Never invent a different number.
+   - Use ONLY tool names, error snippets, file paths, and dates that actually appear in the session data. Do not invent project names, session counts, or tool usage counts.
+   - generatedAt must be today's ISO timestamp.
+   - All fields are required: generatedAt, periodDays, sessionCount, atAGlance (workingWell/hindering/quickWins), behavioralProfile, projects, topTools, workflowInsights (strengths, frictionPoints with examples), codeQualityInsights, opencodeConfigSuggestions, featureRecommendations.
+   - Write in second person. Be specific \u2014 cite real tool names and error patterns from the data.
+   - For opencodeConfigSuggestions, always include a suggestion about using the "instructions" field in opencode.json to load project-specific guidelines (e.g. CONTRIBUTING.md, docs/guidelines.md, .cursor/rules/*.md).
 4. Call insights_save_report with that JSON.
 Do all four steps automatically in sequence.`;
 var InsightsPlugin = async () => {

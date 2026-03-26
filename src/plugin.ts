@@ -6,7 +6,7 @@ import { saveAndOpenReport, getInsightsDir } from './reporter.js'
 import { savePending, readHistory, deleteFromHistory } from './history.js'
 import type { InsightReport } from './types.js'
 
-const REPORT_SCHEMA_DESC = `JSON string with these fields: generatedAt (ISO timestamp), periodDays (number), sessionCount (number), atAGlance ({workingWell, hindering, quickWins}), behavioralProfile (string), projects ([{name, sessionCount, description}]), topTools ([{name, count}]), workflowInsights ({strengths:[{title,detail}], frictionPoints:[{title,detail,examples:[]}], behavioralProfile}), codeQualityInsights ({recurringPatterns:[], recommendations:[]}), opencodeConfigSuggestions ([{description, rule}]), featureRecommendations ([{title, why}]). Write in second person. Cite specific project names, tool names, and error messages from the data.`
+const REPORT_SCHEMA_DESC = `JSON string with these fields: generatedAt (ISO timestamp), periodDays (number), sessionCount (MUST match the exact count returned by insights_get_data — do not invent a different number), atAGlance ({workingWell, hindering, quickWins}), behavioralProfile (string), projects ([{name, sessionCount, description}]), topTools ([{name, count}] — use ONLY tools that actually appear in the session data), workflowInsights ({strengths:[{title,detail}], frictionPoints:[{title,detail,examples:[]}], behavioralProfile}), codeQualityInsights ({recurringPatterns:[], recommendations:[]}), opencodeConfigSuggestions ([{description, rule}] — always include a suggestion about the "instructions" field in opencode.json for loading project guidelines like CONTRIBUTING.md or .cursor/rules/*.md), featureRecommendations ([{title, why}]). Write in second person. Cite only real tool names and error patterns from the data.`
 
 const SYSTEM_PROMPT_INJECTION = `
 
@@ -17,8 +17,14 @@ When the user's message starts with /insights (or a close variant like "run insi
    - --limit N = max sessions
    - --topic <keyword> = filter by keyword
    - --errors = errors_only mode
-2. Call insights_get_data with those parameters
-3. Analyze the returned session data thoroughly and synthesize a complete InsightReport JSON covering all fields: generatedAt, periodDays, sessionCount, atAGlance (workingWell/hindering/quickWins), behavioralProfile, projects, topTools, workflowInsights (strengths, frictionPoints with examples), codeQualityInsights, opencodeConfigSuggestions, featureRecommendations. Write in second person. Be specific — cite real project names, tool names, error patterns from the data.
+2. Call insights_get_data with those parameters.
+3. Synthesize the returned data into a complete InsightReport JSON. CRITICAL rules:
+   - Use the EXACT sessionCount from the data (the "sessionCount" field in the response). Never invent a different number.
+   - Use ONLY tool names, error snippets, file paths, and dates that actually appear in the session data. Do not invent project names, session counts, or tool usage counts.
+   - generatedAt must be today's ISO timestamp.
+   - All fields are required: generatedAt, periodDays, sessionCount, atAGlance (workingWell/hindering/quickWins), behavioralProfile, projects, topTools, workflowInsights (strengths, frictionPoints with examples), codeQualityInsights, opencodeConfigSuggestions, featureRecommendations.
+   - Write in second person. Be specific — cite real tool names and error patterns from the data.
+   - For opencodeConfigSuggestions, always include a suggestion about using the "instructions" field in opencode.json to load project-specific guidelines (e.g. CONTRIBUTING.md, docs/guidelines.md, .cursor/rules/*.md).
 4. Call insights_save_report with that JSON.
 Do all four steps automatically in sequence.`
 
