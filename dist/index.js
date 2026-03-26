@@ -1,809 +1,5 @@
-var __create = Object.create;
-var __defProp = Object.defineProperty;
-var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
-var __getOwnPropNames = Object.getOwnPropertyNames;
-var __getProtoOf = Object.getPrototypeOf;
-var __hasOwnProp = Object.prototype.hasOwnProperty;
-var __require = /* @__PURE__ */ ((x) => typeof require !== "undefined" ? require : typeof Proxy !== "undefined" ? new Proxy(x, {
-  get: (a, b) => (typeof require !== "undefined" ? require : a)[b]
-}) : x)(function(x) {
-  if (typeof require !== "undefined") return require.apply(this, arguments);
-  throw Error('Dynamic require of "' + x + '" is not supported');
-});
-var __commonJS = (cb, mod) => function __require2() {
-  return mod || (0, cb[__getOwnPropNames(cb)[0]])((mod = { exports: {} }).exports, mod), mod.exports;
-};
-var __copyProps = (to, from, except, desc) => {
-  if (from && typeof from === "object" || typeof from === "function") {
-    for (let key of __getOwnPropNames(from))
-      if (!__hasOwnProp.call(to, key) && key !== except)
-        __defProp(to, key, { get: () => from[key], enumerable: !(desc = __getOwnPropDesc(from, key)) || desc.enumerable });
-  }
-  return to;
-};
-var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__getProtoOf(mod)) : {}, __copyProps(
-  // If the importer is in node compatibility mode or this is not an ESM
-  // file that has been converted to a CommonJS file using a Babel-
-  // compatible transform (i.e. "__esModule" has not been set), then set
-  // "default" to the CommonJS "module.exports" for node compatibility.
-  isNodeMode || !mod || !mod.__esModule ? __defProp(target, "default", { value: mod, enumerable: true }) : target,
-  mod
-));
-
-// node_modules/better-sqlite3/lib/util.js
-var require_util = __commonJS({
-  "node_modules/better-sqlite3/lib/util.js"(exports) {
-    "use strict";
-    exports.getBooleanOption = (options, key) => {
-      let value = false;
-      if (key in options && typeof (value = options[key]) !== "boolean") {
-        throw new TypeError(`Expected the "${key}" option to be a boolean`);
-      }
-      return value;
-    };
-    exports.cppdb = Symbol();
-    exports.inspect = Symbol.for("nodejs.util.inspect.custom");
-  }
-});
-
-// node_modules/better-sqlite3/lib/sqlite-error.js
-var require_sqlite_error = __commonJS({
-  "node_modules/better-sqlite3/lib/sqlite-error.js"(exports, module) {
-    "use strict";
-    var descriptor = { value: "SqliteError", writable: true, enumerable: false, configurable: true };
-    function SqliteError(message, code) {
-      if (new.target !== SqliteError) {
-        return new SqliteError(message, code);
-      }
-      if (typeof code !== "string") {
-        throw new TypeError("Expected second argument to be a string");
-      }
-      Error.call(this, message);
-      descriptor.value = "" + message;
-      Object.defineProperty(this, "message", descriptor);
-      Error.captureStackTrace(this, SqliteError);
-      this.code = code;
-    }
-    Object.setPrototypeOf(SqliteError, Error);
-    Object.setPrototypeOf(SqliteError.prototype, Error.prototype);
-    Object.defineProperty(SqliteError.prototype, "name", descriptor);
-    module.exports = SqliteError;
-  }
-});
-
-// node_modules/file-uri-to-path/index.js
-var require_file_uri_to_path = __commonJS({
-  "node_modules/file-uri-to-path/index.js"(exports, module) {
-    var sep = __require("path").sep || "/";
-    module.exports = fileUriToPath;
-    function fileUriToPath(uri) {
-      if ("string" != typeof uri || uri.length <= 7 || "file://" != uri.substring(0, 7)) {
-        throw new TypeError("must pass in a file:// URI to convert to a file path");
-      }
-      var rest = decodeURI(uri.substring(7));
-      var firstSlash = rest.indexOf("/");
-      var host = rest.substring(0, firstSlash);
-      var path4 = rest.substring(firstSlash + 1);
-      if ("localhost" == host) host = "";
-      if (host) {
-        host = sep + sep + host;
-      }
-      path4 = path4.replace(/^(.+)\|/, "$1:");
-      if (sep == "\\") {
-        path4 = path4.replace(/\//g, "\\");
-      }
-      if (/^.+\:/.test(path4)) {
-      } else {
-        path4 = sep + path4;
-      }
-      return host + path4;
-    }
-  }
-});
-
-// node_modules/bindings/bindings.js
-var require_bindings = __commonJS({
-  "node_modules/bindings/bindings.js"(exports, module) {
-    var fs4 = __require("fs");
-    var path4 = __require("path");
-    var fileURLToPath = require_file_uri_to_path();
-    var join4 = path4.join;
-    var dirname = path4.dirname;
-    var exists = fs4.accessSync && function(path5) {
-      try {
-        fs4.accessSync(path5);
-      } catch (e) {
-        return false;
-      }
-      return true;
-    } || fs4.existsSync || path4.existsSync;
-    var defaults = {
-      arrow: process.env.NODE_BINDINGS_ARROW || " \u2192 ",
-      compiled: process.env.NODE_BINDINGS_COMPILED_DIR || "compiled",
-      platform: process.platform,
-      arch: process.arch,
-      nodePreGyp: "node-v" + process.versions.modules + "-" + process.platform + "-" + process.arch,
-      version: process.versions.node,
-      bindings: "bindings.node",
-      try: [
-        // node-gyp's linked version in the "build" dir
-        ["module_root", "build", "bindings"],
-        // node-waf and gyp_addon (a.k.a node-gyp)
-        ["module_root", "build", "Debug", "bindings"],
-        ["module_root", "build", "Release", "bindings"],
-        // Debug files, for development (legacy behavior, remove for node v0.9)
-        ["module_root", "out", "Debug", "bindings"],
-        ["module_root", "Debug", "bindings"],
-        // Release files, but manually compiled (legacy behavior, remove for node v0.9)
-        ["module_root", "out", "Release", "bindings"],
-        ["module_root", "Release", "bindings"],
-        // Legacy from node-waf, node <= 0.4.x
-        ["module_root", "build", "default", "bindings"],
-        // Production "Release" buildtype binary (meh...)
-        ["module_root", "compiled", "version", "platform", "arch", "bindings"],
-        // node-qbs builds
-        ["module_root", "addon-build", "release", "install-root", "bindings"],
-        ["module_root", "addon-build", "debug", "install-root", "bindings"],
-        ["module_root", "addon-build", "default", "install-root", "bindings"],
-        // node-pre-gyp path ./lib/binding/{node_abi}-{platform}-{arch}
-        ["module_root", "lib", "binding", "nodePreGyp", "bindings"]
-      ]
-    };
-    function bindings(opts) {
-      if (typeof opts == "string") {
-        opts = { bindings: opts };
-      } else if (!opts) {
-        opts = {};
-      }
-      Object.keys(defaults).map(function(i2) {
-        if (!(i2 in opts)) opts[i2] = defaults[i2];
-      });
-      if (!opts.module_root) {
-        opts.module_root = exports.getRoot(exports.getFileName());
-      }
-      if (path4.extname(opts.bindings) != ".node") {
-        opts.bindings += ".node";
-      }
-      var requireFunc = typeof __webpack_require__ === "function" ? __non_webpack_require__ : __require;
-      var tries = [], i = 0, l = opts.try.length, n, b, err;
-      for (; i < l; i++) {
-        n = join4.apply(
-          null,
-          opts.try[i].map(function(p) {
-            return opts[p] || p;
-          })
-        );
-        tries.push(n);
-        try {
-          b = opts.path ? requireFunc.resolve(n) : requireFunc(n);
-          if (!opts.path) {
-            b.path = n;
-          }
-          return b;
-        } catch (e) {
-          if (e.code !== "MODULE_NOT_FOUND" && e.code !== "QUALIFIED_PATH_RESOLUTION_FAILED" && !/not find/i.test(e.message)) {
-            throw e;
-          }
-        }
-      }
-      err = new Error(
-        "Could not locate the bindings file. Tried:\n" + tries.map(function(a) {
-          return opts.arrow + a;
-        }).join("\n")
-      );
-      err.tries = tries;
-      throw err;
-    }
-    module.exports = exports = bindings;
-    exports.getFileName = function getFileName(calling_file) {
-      var origPST = Error.prepareStackTrace, origSTL = Error.stackTraceLimit, dummy = {}, fileName;
-      Error.stackTraceLimit = 10;
-      Error.prepareStackTrace = function(e, st) {
-        for (var i = 0, l = st.length; i < l; i++) {
-          fileName = st[i].getFileName();
-          if (fileName !== __filename) {
-            if (calling_file) {
-              if (fileName !== calling_file) {
-                return;
-              }
-            } else {
-              return;
-            }
-          }
-        }
-      };
-      Error.captureStackTrace(dummy);
-      dummy.stack;
-      Error.prepareStackTrace = origPST;
-      Error.stackTraceLimit = origSTL;
-      var fileSchema = "file://";
-      if (fileName.indexOf(fileSchema) === 0) {
-        fileName = fileURLToPath(fileName);
-      }
-      return fileName;
-    };
-    exports.getRoot = function getRoot(file) {
-      var dir = dirname(file), prev;
-      while (true) {
-        if (dir === ".") {
-          dir = process.cwd();
-        }
-        if (exists(join4(dir, "package.json")) || exists(join4(dir, "node_modules"))) {
-          return dir;
-        }
-        if (prev === dir) {
-          throw new Error(
-            'Could not find module root given file: "' + file + '". Do you have a `package.json` file? '
-          );
-        }
-        prev = dir;
-        dir = join4(dir, "..");
-      }
-    };
-  }
-});
-
-// node_modules/better-sqlite3/lib/methods/wrappers.js
-var require_wrappers = __commonJS({
-  "node_modules/better-sqlite3/lib/methods/wrappers.js"(exports) {
-    "use strict";
-    var { cppdb } = require_util();
-    exports.prepare = function prepare(sql) {
-      return this[cppdb].prepare(sql, this, false);
-    };
-    exports.exec = function exec(sql) {
-      this[cppdb].exec(sql);
-      return this;
-    };
-    exports.close = function close() {
-      this[cppdb].close();
-      return this;
-    };
-    exports.loadExtension = function loadExtension(...args) {
-      this[cppdb].loadExtension(...args);
-      return this;
-    };
-    exports.defaultSafeIntegers = function defaultSafeIntegers(...args) {
-      this[cppdb].defaultSafeIntegers(...args);
-      return this;
-    };
-    exports.unsafeMode = function unsafeMode(...args) {
-      this[cppdb].unsafeMode(...args);
-      return this;
-    };
-    exports.getters = {
-      name: {
-        get: function name() {
-          return this[cppdb].name;
-        },
-        enumerable: true
-      },
-      open: {
-        get: function open() {
-          return this[cppdb].open;
-        },
-        enumerable: true
-      },
-      inTransaction: {
-        get: function inTransaction() {
-          return this[cppdb].inTransaction;
-        },
-        enumerable: true
-      },
-      readonly: {
-        get: function readonly() {
-          return this[cppdb].readonly;
-        },
-        enumerable: true
-      },
-      memory: {
-        get: function memory() {
-          return this[cppdb].memory;
-        },
-        enumerable: true
-      }
-    };
-  }
-});
-
-// node_modules/better-sqlite3/lib/methods/transaction.js
-var require_transaction = __commonJS({
-  "node_modules/better-sqlite3/lib/methods/transaction.js"(exports, module) {
-    "use strict";
-    var { cppdb } = require_util();
-    var controllers = /* @__PURE__ */ new WeakMap();
-    module.exports = function transaction(fn) {
-      if (typeof fn !== "function") throw new TypeError("Expected first argument to be a function");
-      const db = this[cppdb];
-      const controller = getController(db, this);
-      const { apply } = Function.prototype;
-      const properties = {
-        default: { value: wrapTransaction(apply, fn, db, controller.default) },
-        deferred: { value: wrapTransaction(apply, fn, db, controller.deferred) },
-        immediate: { value: wrapTransaction(apply, fn, db, controller.immediate) },
-        exclusive: { value: wrapTransaction(apply, fn, db, controller.exclusive) },
-        database: { value: this, enumerable: true }
-      };
-      Object.defineProperties(properties.default.value, properties);
-      Object.defineProperties(properties.deferred.value, properties);
-      Object.defineProperties(properties.immediate.value, properties);
-      Object.defineProperties(properties.exclusive.value, properties);
-      return properties.default.value;
-    };
-    var getController = (db, self) => {
-      let controller = controllers.get(db);
-      if (!controller) {
-        const shared = {
-          commit: db.prepare("COMMIT", self, false),
-          rollback: db.prepare("ROLLBACK", self, false),
-          savepoint: db.prepare("SAVEPOINT `	_bs3.	`", self, false),
-          release: db.prepare("RELEASE `	_bs3.	`", self, false),
-          rollbackTo: db.prepare("ROLLBACK TO `	_bs3.	`", self, false)
-        };
-        controllers.set(db, controller = {
-          default: Object.assign({ begin: db.prepare("BEGIN", self, false) }, shared),
-          deferred: Object.assign({ begin: db.prepare("BEGIN DEFERRED", self, false) }, shared),
-          immediate: Object.assign({ begin: db.prepare("BEGIN IMMEDIATE", self, false) }, shared),
-          exclusive: Object.assign({ begin: db.prepare("BEGIN EXCLUSIVE", self, false) }, shared)
-        });
-      }
-      return controller;
-    };
-    var wrapTransaction = (apply, fn, db, { begin, commit, rollback, savepoint, release, rollbackTo }) => function sqliteTransaction() {
-      let before, after, undo;
-      if (db.inTransaction) {
-        before = savepoint;
-        after = release;
-        undo = rollbackTo;
-      } else {
-        before = begin;
-        after = commit;
-        undo = rollback;
-      }
-      before.run();
-      try {
-        const result = apply.call(fn, this, arguments);
-        if (result && typeof result.then === "function") {
-          throw new TypeError("Transaction function cannot return a promise");
-        }
-        after.run();
-        return result;
-      } catch (ex) {
-        if (db.inTransaction) {
-          undo.run();
-          if (undo !== rollback) after.run();
-        }
-        throw ex;
-      }
-    };
-  }
-});
-
-// node_modules/better-sqlite3/lib/methods/pragma.js
-var require_pragma = __commonJS({
-  "node_modules/better-sqlite3/lib/methods/pragma.js"(exports, module) {
-    "use strict";
-    var { getBooleanOption, cppdb } = require_util();
-    module.exports = function pragma(source, options) {
-      if (options == null) options = {};
-      if (typeof source !== "string") throw new TypeError("Expected first argument to be a string");
-      if (typeof options !== "object") throw new TypeError("Expected second argument to be an options object");
-      const simple = getBooleanOption(options, "simple");
-      const stmt = this[cppdb].prepare(`PRAGMA ${source}`, this, true);
-      return simple ? stmt.pluck().get() : stmt.all();
-    };
-  }
-});
-
-// node_modules/better-sqlite3/lib/methods/backup.js
-var require_backup = __commonJS({
-  "node_modules/better-sqlite3/lib/methods/backup.js"(exports, module) {
-    "use strict";
-    var fs4 = __require("fs");
-    var path4 = __require("path");
-    var { promisify } = __require("util");
-    var { cppdb } = require_util();
-    var fsAccess = promisify(fs4.access);
-    module.exports = async function backup(filename, options) {
-      if (options == null) options = {};
-      if (typeof filename !== "string") throw new TypeError("Expected first argument to be a string");
-      if (typeof options !== "object") throw new TypeError("Expected second argument to be an options object");
-      filename = filename.trim();
-      const attachedName = "attached" in options ? options.attached : "main";
-      const handler = "progress" in options ? options.progress : null;
-      if (!filename) throw new TypeError("Backup filename cannot be an empty string");
-      if (filename === ":memory:") throw new TypeError('Invalid backup filename ":memory:"');
-      if (typeof attachedName !== "string") throw new TypeError('Expected the "attached" option to be a string');
-      if (!attachedName) throw new TypeError('The "attached" option cannot be an empty string');
-      if (handler != null && typeof handler !== "function") throw new TypeError('Expected the "progress" option to be a function');
-      await fsAccess(path4.dirname(filename)).catch(() => {
-        throw new TypeError("Cannot save backup because the directory does not exist");
-      });
-      const isNewFile = await fsAccess(filename).then(() => false, () => true);
-      return runBackup(this[cppdb].backup(this, attachedName, filename, isNewFile), handler || null);
-    };
-    var runBackup = (backup, handler) => {
-      let rate = 0;
-      let useDefault = true;
-      return new Promise((resolve, reject) => {
-        setImmediate(function step() {
-          try {
-            const progress = backup.transfer(rate);
-            if (!progress.remainingPages) {
-              backup.close();
-              resolve(progress);
-              return;
-            }
-            if (useDefault) {
-              useDefault = false;
-              rate = 100;
-            }
-            if (handler) {
-              const ret = handler(progress);
-              if (ret !== void 0) {
-                if (typeof ret === "number" && ret === ret) rate = Math.max(0, Math.min(2147483647, Math.round(ret)));
-                else throw new TypeError("Expected progress callback to return a number or undefined");
-              }
-            }
-            setImmediate(step);
-          } catch (err) {
-            backup.close();
-            reject(err);
-          }
-        });
-      });
-    };
-  }
-});
-
-// node_modules/better-sqlite3/lib/methods/serialize.js
-var require_serialize = __commonJS({
-  "node_modules/better-sqlite3/lib/methods/serialize.js"(exports, module) {
-    "use strict";
-    var { cppdb } = require_util();
-    module.exports = function serialize(options) {
-      if (options == null) options = {};
-      if (typeof options !== "object") throw new TypeError("Expected first argument to be an options object");
-      const attachedName = "attached" in options ? options.attached : "main";
-      if (typeof attachedName !== "string") throw new TypeError('Expected the "attached" option to be a string');
-      if (!attachedName) throw new TypeError('The "attached" option cannot be an empty string');
-      return this[cppdb].serialize(attachedName);
-    };
-  }
-});
-
-// node_modules/better-sqlite3/lib/methods/function.js
-var require_function = __commonJS({
-  "node_modules/better-sqlite3/lib/methods/function.js"(exports, module) {
-    "use strict";
-    var { getBooleanOption, cppdb } = require_util();
-    module.exports = function defineFunction(name, options, fn) {
-      if (options == null) options = {};
-      if (typeof options === "function") {
-        fn = options;
-        options = {};
-      }
-      if (typeof name !== "string") throw new TypeError("Expected first argument to be a string");
-      if (typeof fn !== "function") throw new TypeError("Expected last argument to be a function");
-      if (typeof options !== "object") throw new TypeError("Expected second argument to be an options object");
-      if (!name) throw new TypeError("User-defined function name cannot be an empty string");
-      const safeIntegers = "safeIntegers" in options ? +getBooleanOption(options, "safeIntegers") : 2;
-      const deterministic = getBooleanOption(options, "deterministic");
-      const directOnly = getBooleanOption(options, "directOnly");
-      const varargs = getBooleanOption(options, "varargs");
-      let argCount = -1;
-      if (!varargs) {
-        argCount = fn.length;
-        if (!Number.isInteger(argCount) || argCount < 0) throw new TypeError("Expected function.length to be a positive integer");
-        if (argCount > 100) throw new RangeError("User-defined functions cannot have more than 100 arguments");
-      }
-      this[cppdb].function(fn, name, argCount, safeIntegers, deterministic, directOnly);
-      return this;
-    };
-  }
-});
-
-// node_modules/better-sqlite3/lib/methods/aggregate.js
-var require_aggregate = __commonJS({
-  "node_modules/better-sqlite3/lib/methods/aggregate.js"(exports, module) {
-    "use strict";
-    var { getBooleanOption, cppdb } = require_util();
-    module.exports = function defineAggregate(name, options) {
-      if (typeof name !== "string") throw new TypeError("Expected first argument to be a string");
-      if (typeof options !== "object" || options === null) throw new TypeError("Expected second argument to be an options object");
-      if (!name) throw new TypeError("User-defined function name cannot be an empty string");
-      const start = "start" in options ? options.start : null;
-      const step = getFunctionOption(options, "step", true);
-      const inverse = getFunctionOption(options, "inverse", false);
-      const result = getFunctionOption(options, "result", false);
-      const safeIntegers = "safeIntegers" in options ? +getBooleanOption(options, "safeIntegers") : 2;
-      const deterministic = getBooleanOption(options, "deterministic");
-      const directOnly = getBooleanOption(options, "directOnly");
-      const varargs = getBooleanOption(options, "varargs");
-      let argCount = -1;
-      if (!varargs) {
-        argCount = Math.max(getLength(step), inverse ? getLength(inverse) : 0);
-        if (argCount > 0) argCount -= 1;
-        if (argCount > 100) throw new RangeError("User-defined functions cannot have more than 100 arguments");
-      }
-      this[cppdb].aggregate(start, step, inverse, result, name, argCount, safeIntegers, deterministic, directOnly);
-      return this;
-    };
-    var getFunctionOption = (options, key, required) => {
-      const value = key in options ? options[key] : null;
-      if (typeof value === "function") return value;
-      if (value != null) throw new TypeError(`Expected the "${key}" option to be a function`);
-      if (required) throw new TypeError(`Missing required option "${key}"`);
-      return null;
-    };
-    var getLength = ({ length }) => {
-      if (Number.isInteger(length) && length >= 0) return length;
-      throw new TypeError("Expected function.length to be a positive integer");
-    };
-  }
-});
-
-// node_modules/better-sqlite3/lib/methods/table.js
-var require_table = __commonJS({
-  "node_modules/better-sqlite3/lib/methods/table.js"(exports, module) {
-    "use strict";
-    var { cppdb } = require_util();
-    module.exports = function defineTable(name, factory) {
-      if (typeof name !== "string") throw new TypeError("Expected first argument to be a string");
-      if (!name) throw new TypeError("Virtual table module name cannot be an empty string");
-      let eponymous = false;
-      if (typeof factory === "object" && factory !== null) {
-        eponymous = true;
-        factory = defer(parseTableDefinition(factory, "used", name));
-      } else {
-        if (typeof factory !== "function") throw new TypeError("Expected second argument to be a function or a table definition object");
-        factory = wrapFactory(factory);
-      }
-      this[cppdb].table(factory, name, eponymous);
-      return this;
-    };
-    function wrapFactory(factory) {
-      return function virtualTableFactory(moduleName, databaseName, tableName, ...args) {
-        const thisObject = {
-          module: moduleName,
-          database: databaseName,
-          table: tableName
-        };
-        const def = apply.call(factory, thisObject, args);
-        if (typeof def !== "object" || def === null) {
-          throw new TypeError(`Virtual table module "${moduleName}" did not return a table definition object`);
-        }
-        return parseTableDefinition(def, "returned", moduleName);
-      };
-    }
-    function parseTableDefinition(def, verb, moduleName) {
-      if (!hasOwnProperty.call(def, "rows")) {
-        throw new TypeError(`Virtual table module "${moduleName}" ${verb} a table definition without a "rows" property`);
-      }
-      if (!hasOwnProperty.call(def, "columns")) {
-        throw new TypeError(`Virtual table module "${moduleName}" ${verb} a table definition without a "columns" property`);
-      }
-      const rows = def.rows;
-      if (typeof rows !== "function" || Object.getPrototypeOf(rows) !== GeneratorFunctionPrototype) {
-        throw new TypeError(`Virtual table module "${moduleName}" ${verb} a table definition with an invalid "rows" property (should be a generator function)`);
-      }
-      let columns = def.columns;
-      if (!Array.isArray(columns) || !(columns = [...columns]).every((x) => typeof x === "string")) {
-        throw new TypeError(`Virtual table module "${moduleName}" ${verb} a table definition with an invalid "columns" property (should be an array of strings)`);
-      }
-      if (columns.length !== new Set(columns).size) {
-        throw new TypeError(`Virtual table module "${moduleName}" ${verb} a table definition with duplicate column names`);
-      }
-      if (!columns.length) {
-        throw new RangeError(`Virtual table module "${moduleName}" ${verb} a table definition with zero columns`);
-      }
-      let parameters;
-      if (hasOwnProperty.call(def, "parameters")) {
-        parameters = def.parameters;
-        if (!Array.isArray(parameters) || !(parameters = [...parameters]).every((x) => typeof x === "string")) {
-          throw new TypeError(`Virtual table module "${moduleName}" ${verb} a table definition with an invalid "parameters" property (should be an array of strings)`);
-        }
-      } else {
-        parameters = inferParameters(rows);
-      }
-      if (parameters.length !== new Set(parameters).size) {
-        throw new TypeError(`Virtual table module "${moduleName}" ${verb} a table definition with duplicate parameter names`);
-      }
-      if (parameters.length > 32) {
-        throw new RangeError(`Virtual table module "${moduleName}" ${verb} a table definition with more than the maximum number of 32 parameters`);
-      }
-      for (const parameter of parameters) {
-        if (columns.includes(parameter)) {
-          throw new TypeError(`Virtual table module "${moduleName}" ${verb} a table definition with column "${parameter}" which was ambiguously defined as both a column and parameter`);
-        }
-      }
-      let safeIntegers = 2;
-      if (hasOwnProperty.call(def, "safeIntegers")) {
-        const bool = def.safeIntegers;
-        if (typeof bool !== "boolean") {
-          throw new TypeError(`Virtual table module "${moduleName}" ${verb} a table definition with an invalid "safeIntegers" property (should be a boolean)`);
-        }
-        safeIntegers = +bool;
-      }
-      let directOnly = false;
-      if (hasOwnProperty.call(def, "directOnly")) {
-        directOnly = def.directOnly;
-        if (typeof directOnly !== "boolean") {
-          throw new TypeError(`Virtual table module "${moduleName}" ${verb} a table definition with an invalid "directOnly" property (should be a boolean)`);
-        }
-      }
-      const columnDefinitions = [
-        ...parameters.map(identifier).map((str) => `${str} HIDDEN`),
-        ...columns.map(identifier)
-      ];
-      return [
-        `CREATE TABLE x(${columnDefinitions.join(", ")});`,
-        wrapGenerator(rows, new Map(columns.map((x, i) => [x, parameters.length + i])), moduleName),
-        parameters,
-        safeIntegers,
-        directOnly
-      ];
-    }
-    function wrapGenerator(generator, columnMap, moduleName) {
-      return function* virtualTable(...args) {
-        const output = args.map((x) => Buffer.isBuffer(x) ? Buffer.from(x) : x);
-        for (let i = 0; i < columnMap.size; ++i) {
-          output.push(null);
-        }
-        for (const row of generator(...args)) {
-          if (Array.isArray(row)) {
-            extractRowArray(row, output, columnMap.size, moduleName);
-            yield output;
-          } else if (typeof row === "object" && row !== null) {
-            extractRowObject(row, output, columnMap, moduleName);
-            yield output;
-          } else {
-            throw new TypeError(`Virtual table module "${moduleName}" yielded something that isn't a valid row object`);
-          }
-        }
-      };
-    }
-    function extractRowArray(row, output, columnCount, moduleName) {
-      if (row.length !== columnCount) {
-        throw new TypeError(`Virtual table module "${moduleName}" yielded a row with an incorrect number of columns`);
-      }
-      const offset = output.length - columnCount;
-      for (let i = 0; i < columnCount; ++i) {
-        output[i + offset] = row[i];
-      }
-    }
-    function extractRowObject(row, output, columnMap, moduleName) {
-      let count = 0;
-      for (const key of Object.keys(row)) {
-        const index = columnMap.get(key);
-        if (index === void 0) {
-          throw new TypeError(`Virtual table module "${moduleName}" yielded a row with an undeclared column "${key}"`);
-        }
-        output[index] = row[key];
-        count += 1;
-      }
-      if (count !== columnMap.size) {
-        throw new TypeError(`Virtual table module "${moduleName}" yielded a row with missing columns`);
-      }
-    }
-    function inferParameters({ length }) {
-      if (!Number.isInteger(length) || length < 0) {
-        throw new TypeError("Expected function.length to be a positive integer");
-      }
-      const params = [];
-      for (let i = 0; i < length; ++i) {
-        params.push(`$${i + 1}`);
-      }
-      return params;
-    }
-    var { hasOwnProperty } = Object.prototype;
-    var { apply } = Function.prototype;
-    var GeneratorFunctionPrototype = Object.getPrototypeOf(function* () {
-    });
-    var identifier = (str) => `"${str.replace(/"/g, '""')}"`;
-    var defer = (x) => () => x;
-  }
-});
-
-// node_modules/better-sqlite3/lib/methods/inspect.js
-var require_inspect = __commonJS({
-  "node_modules/better-sqlite3/lib/methods/inspect.js"(exports, module) {
-    "use strict";
-    var DatabaseInspection = function Database2() {
-    };
-    module.exports = function inspect(depth, opts) {
-      return Object.assign(new DatabaseInspection(), this);
-    };
-  }
-});
-
-// node_modules/better-sqlite3/lib/database.js
-var require_database = __commonJS({
-  "node_modules/better-sqlite3/lib/database.js"(exports, module) {
-    "use strict";
-    var fs4 = __require("fs");
-    var path4 = __require("path");
-    var util = require_util();
-    var SqliteError = require_sqlite_error();
-    var DEFAULT_ADDON;
-    function Database2(filenameGiven, options) {
-      if (new.target == null) {
-        return new Database2(filenameGiven, options);
-      }
-      let buffer;
-      if (Buffer.isBuffer(filenameGiven)) {
-        buffer = filenameGiven;
-        filenameGiven = ":memory:";
-      }
-      if (filenameGiven == null) filenameGiven = "";
-      if (options == null) options = {};
-      if (typeof filenameGiven !== "string") throw new TypeError("Expected first argument to be a string");
-      if (typeof options !== "object") throw new TypeError("Expected second argument to be an options object");
-      if ("readOnly" in options) throw new TypeError('Misspelled option "readOnly" should be "readonly"');
-      if ("memory" in options) throw new TypeError('Option "memory" was removed in v7.0.0 (use ":memory:" filename instead)');
-      const filename = filenameGiven.trim();
-      const anonymous = filename === "" || filename === ":memory:";
-      const readonly = util.getBooleanOption(options, "readonly");
-      const fileMustExist = util.getBooleanOption(options, "fileMustExist");
-      const timeout = "timeout" in options ? options.timeout : 5e3;
-      const verbose = "verbose" in options ? options.verbose : null;
-      const nativeBinding = "nativeBinding" in options ? options.nativeBinding : null;
-      if (readonly && anonymous && !buffer) throw new TypeError("In-memory/temporary databases cannot be readonly");
-      if (!Number.isInteger(timeout) || timeout < 0) throw new TypeError('Expected the "timeout" option to be a positive integer');
-      if (timeout > 2147483647) throw new RangeError('Option "timeout" cannot be greater than 2147483647');
-      if (verbose != null && typeof verbose !== "function") throw new TypeError('Expected the "verbose" option to be a function');
-      if (nativeBinding != null && typeof nativeBinding !== "string" && typeof nativeBinding !== "object") throw new TypeError('Expected the "nativeBinding" option to be a string or addon object');
-      let addon;
-      if (nativeBinding == null) {
-        addon = DEFAULT_ADDON || (DEFAULT_ADDON = require_bindings()("better_sqlite3.node"));
-      } else if (typeof nativeBinding === "string") {
-        const requireFunc = typeof __non_webpack_require__ === "function" ? __non_webpack_require__ : __require;
-        addon = requireFunc(path4.resolve(nativeBinding).replace(/(\.node)?$/, ".node"));
-      } else {
-        addon = nativeBinding;
-      }
-      if (!addon.isInitialized) {
-        addon.setErrorConstructor(SqliteError);
-        addon.isInitialized = true;
-      }
-      if (!anonymous && !fs4.existsSync(path4.dirname(filename))) {
-        throw new TypeError("Cannot open database because the directory does not exist");
-      }
-      Object.defineProperties(this, {
-        [util.cppdb]: { value: new addon.Database(filename, filenameGiven, anonymous, readonly, fileMustExist, timeout, verbose || null, buffer || null) },
-        ...wrappers.getters
-      });
-    }
-    var wrappers = require_wrappers();
-    Database2.prototype.prepare = wrappers.prepare;
-    Database2.prototype.transaction = require_transaction();
-    Database2.prototype.pragma = require_pragma();
-    Database2.prototype.backup = require_backup();
-    Database2.prototype.serialize = require_serialize();
-    Database2.prototype.function = require_function();
-    Database2.prototype.aggregate = require_aggregate();
-    Database2.prototype.table = require_table();
-    Database2.prototype.loadExtension = wrappers.loadExtension;
-    Database2.prototype.exec = wrappers.exec;
-    Database2.prototype.close = wrappers.close;
-    Database2.prototype.defaultSafeIntegers = wrappers.defaultSafeIntegers;
-    Database2.prototype.unsafeMode = wrappers.unsafeMode;
-    Database2.prototype[util.inspect] = require_inspect();
-    module.exports = Database2;
-  }
-});
-
-// node_modules/better-sqlite3/lib/index.js
-var require_lib = __commonJS({
-  "node_modules/better-sqlite3/lib/index.js"(exports, module) {
-    "use strict";
-    module.exports = require_database();
-    module.exports.SqliteError = require_sqlite_error();
-  }
-});
-
 // src/reader.ts
-var import_better_sqlite3 = __toESM(require_lib(), 1);
+import Database from "better-sqlite3";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
@@ -815,15 +11,16 @@ function readSessionsFromDb(db, days, currentSessionId) {
   const cutoff = Date.now() - days * 24 * 60 * 60 * 1e3;
   const rows = db.prepare(`
     SELECT
-      s.id        AS sid,
-      s.time_created,
-      s.time_updated,
-      s.data      AS sdata,
-      m.id        AS mid,
-      m.time_created AS mtime,
-      m.data      AS mdata,
-      p.id        AS pid,
-      p.data      AS pdata
+      s.id           AS sid,
+      s.project_id   AS sprojectid,
+      s.title        AS stitle,
+      s.time_created AS screated,
+      s.time_updated AS supdated,
+      m.id           AS mid,
+      m.time_created AS mcreated,
+      m.data         AS mdata,
+      p.id           AS pid,
+      p.data         AS pdata
     FROM session s
     LEFT JOIN message m ON m.session_id = s.id
     LEFT JOIN part p ON p.message_id = m.id
@@ -838,17 +35,11 @@ function readSessionsFromDb(db, days, currentSessionId) {
   for (const row of rows) {
     const sid = row["sid"];
     if (!sessionMap.has(sid)) {
-      let sdata = {};
-      try {
-        sdata = JSON.parse(row["sdata"]);
-      } catch {
-        continue;
-      }
       sessionMap.set(sid, {
         id: sid,
-        projectId: sdata.projectId ?? "",
-        createdAt: row["time_created"],
-        updatedAt: row["time_updated"],
+        projectId: row["sprojectid"] ?? "",
+        createdAt: row["screated"],
+        updatedAt: row["supdated"],
         messages: []
       });
     }
@@ -878,7 +69,7 @@ function readSessionsFromDb(db, days, currentSessionId) {
     }
     messageMap.get(mid).parts.push({
       type: pdata.type ?? "text",
-      content: pdata.content ?? ""
+      content: pdata.text ?? pdata.content ?? ""
     });
   }
   return Array.from(sessionMap.values());
@@ -890,7 +81,7 @@ function readSessions(days) {
       `opencode database not found at ${dbPath}. Is opencode installed and has it been used?`
     );
   }
-  const db = new import_better_sqlite3.default(dbPath, { readonly: true });
+  const db = new Database(dbPath, { readonly: true });
   const currentSessionId = process.env.OPENCODE_SESSION_ID;
   try {
     return readSessionsFromDb(db, days, currentSessionId);
@@ -900,38 +91,92 @@ function readSessions(days) {
 }
 
 // src/extractor.ts
-import * as fs2 from "node:fs";
-import * as os2 from "node:os";
-import * as path2 from "node:path";
+import * as fs3 from "node:fs";
+import * as os3 from "node:os";
+import * as path3 from "node:path";
 
 // src/llm.ts
 import { spawnSync } from "node:child_process";
+import * as fs2 from "node:fs";
+import * as os2 from "node:os";
+import * as path2 from "node:path";
 async function callLlm(systemPrompt, userMessage) {
   const prompt = `${systemPrompt}
 
 ${userMessage}`;
-  const result = spawnSync("opencode", ["run", "--print", prompt], {
-    encoding: "utf-8",
-    maxBuffer: 10 * 1024 * 1024
-  });
+  const tmpFile = path2.join(os2.tmpdir(), `op-insight-${Date.now()}-${Math.random().toString(36).slice(2)}.txt`);
+  fs2.writeFileSync(tmpFile, prompt, "utf-8");
+  let result;
+  try {
+    result = spawnSync(
+      "opencode",
+      ["run", "--format", "json", "Execute:", "--file", tmpFile],
+      {
+        encoding: "utf-8",
+        maxBuffer: 50 * 1024 * 1024,
+        shell: true
+      }
+    );
+  } finally {
+    try {
+      fs2.unlinkSync(tmpFile);
+    } catch {
+    }
+  }
   if (result.error) {
     throw new Error(`Failed to run opencode: ${result.error.message}`);
   }
   if (result.status !== 0) {
     throw new Error(`opencode exited with code ${result.status}: ${result.stderr}`);
   }
-  return result.stdout.trim();
+  const lines = result.stdout.split("\n").filter((l) => l.trim());
+  const textParts = [];
+  for (const line of lines) {
+    try {
+      const event = JSON.parse(line);
+      if (event.type === "text" && event.part?.text) {
+        textParts.push(event.part.text);
+      }
+    } catch {
+    }
+  }
+  return textParts.join("").trim();
+}
+
+// src/json-utils.ts
+function extractJson(raw) {
+  const trimmed = raw.trim();
+  try {
+    return JSON.parse(trimmed);
+  } catch {
+  }
+  const fenceMatch = trimmed.match(/```(?:json)?\s*([\s\S]*?)```/);
+  if (fenceMatch) {
+    try {
+      return JSON.parse(fenceMatch[1].trim());
+    } catch {
+    }
+  }
+  const objMatch = trimmed.match(/\{[\s\S]*\}/);
+  if (objMatch) {
+    try {
+      return JSON.parse(objMatch[0]);
+    } catch {
+    }
+  }
+  throw new Error(`Could not extract JSON from response:
+${raw.slice(0, 400)}`);
 }
 
 // src/extractor.ts
 var CHUNK_SIZE = 25e3;
 var MAX_DIRECT_SIZE = 3e4;
 function getCacheDir() {
-  const dataDir = process.env.OPENCODE_DATA_DIR ?? path2.join(os2.homedir(), ".local", "share", "opencode");
-  return path2.join(dataDir, "insights-cache");
+  const dataDir = process.env.OPENCODE_DATA_DIR ?? path3.join(os3.homedir(), ".local", "share", "opencode");
+  return path3.join(dataDir, "insights-cache");
 }
 function getCachePath(sessionId) {
-  return path2.join(getCacheDir(), `${sessionId}.json`);
+  return path3.join(getCacheDir(), `${sessionId}.json`);
 }
 function serializeSession(session) {
   return session.messages.map((m) => {
@@ -939,7 +184,10 @@ function serializeSession(session) {
     return `${m.role}: ${text}`;
   }).join("\n\n");
 }
-var FACET_SYSTEM_PROMPT = `You are analyzing a coding session transcript. Extract a structured JSON facet with these fields:
+var FACET_SYSTEM_PROMPT = `You are analyzing a coding session transcript.
+IMPORTANT: Your ENTIRE response must be a single valid JSON object. Do NOT include any text, explanation, or markdown before or after the JSON. Start your response with { and end with }.
+
+Extract a JSON object with these fields:
 - sessionId: string (copy from input)
 - projectName: string (infer from file paths or context; use "Unknown" if unclear)
 - summary: string (2-3 sentence description of what was done)
@@ -947,37 +195,103 @@ var FACET_SYSTEM_PROMPT = `You are analyzing a coding session transcript. Extrac
 - repeatedInstructions: string[] (instructions the user gave more than once)
 - frictionPoints: string[] (corrections, misunderstandings, retries)
 - codeQualityPatterns: string[] (recurring bug types or antipatterns)
-- workflowPatterns: string[] (how the user prompts and iterates)
-
-Return ONLY valid JSON, no markdown fences.`;
+- workflowPatterns: string[] (how the user prompts and iterates)`;
 async function summarizeChunk(chunk) {
   return callLlm(
     "Summarize this coding session excerpt in 3-5 sentences, preserving key actions, tools, and any friction points.",
     chunk
   );
 }
-async function callFacetLlm(sessionId, text) {
-  const raw = await callLlm(FACET_SYSTEM_PROMPT, `sessionId: ${sessionId}
+async function callFacetLlm(sessionId, text, systemPrompt = FACET_SYSTEM_PROMPT) {
+  const raw = await callLlm(systemPrompt, `sessionId: ${sessionId}
 
 ${text}`);
   try {
-    return JSON.parse(raw);
-  } catch (e) {
-    throw new Error(`LLM returned invalid JSON for session ${sessionId}: ${e}`);
+    return extractJson(raw);
+  } catch {
+    process.stderr.write(`(invalid JSON, using defaults) `);
+    return {
+      sessionId,
+      projectName: "Unknown",
+      summary: "Could not extract facet from this session.",
+      toolsUsed: [],
+      repeatedInstructions: [],
+      frictionPoints: [],
+      codeQualityPatterns: [],
+      workflowPatterns: []
+    };
   }
+}
+var ERROR_FACET_SYSTEM_PROMPT = `You are analyzing tool errors from a coding session.
+IMPORTANT: Your ENTIRE response must be a single valid JSON object. Do NOT include any text, explanation, or markdown before or after the JSON. Start your response with { and end with }.
+
+Extract a JSON object with these fields:
+- sessionId: string (copy from input)
+- projectName: string (infer from file paths or context; use "Unknown" if unclear)
+- summary: string (1-2 sentences describing the errors and what triggered them)
+- toolsUsed: string[] (tools that errored, e.g. ["bash", "edit"])
+- repeatedInstructions: string[] (any repeated attempts to fix the same thing)
+- frictionPoints: string[] (each distinct error with brief context)
+- codeQualityPatterns: string[] (patterns in the mistakes, e.g. "wrong path assumptions")
+- workflowPatterns: string[] (how the user/assistant responded to the errors)`;
+async function extractErrorFacet(session) {
+  const messages = session.messages;
+  const errorSnippets = [];
+  for (let i = 0; i < messages.length; i++) {
+    const msg = messages[i];
+    const text2 = msg.parts.filter((p) => p.type === "text").map((p) => p.content).join("\n");
+    if (msg.role === "assistant" && /error|failed|cannot|invalid|not found|exit code [^0]/i.test(text2)) {
+      const contextStart = Math.max(0, i - 1);
+      const contextEnd = Math.min(messages.length - 1, i + 1);
+      const snippet = messages.slice(contextStart, contextEnd + 1).map((m) => {
+        const t = m.parts.filter((p) => p.type === "text").map((p) => p.content).join("\n");
+        return `${m.role}: ${t.slice(0, 500)}`;
+      }).join("\n\n");
+      errorSnippets.push(snippet);
+    }
+  }
+  if (errorSnippets.length === 0) {
+    return {
+      sessionId: session.id,
+      projectName: "Unknown",
+      summary: "No tool errors found in this session.",
+      toolsUsed: [],
+      repeatedInstructions: [],
+      frictionPoints: [],
+      codeQualityPatterns: [],
+      workflowPatterns: []
+    };
+  }
+  process.stderr.write(`(${errorSnippets.length} errors) `);
+  const text = errorSnippets.join("\n\n---\n\n").slice(0, 15e3);
+  return callFacetLlm(session.id, text, ERROR_FACET_SYSTEM_PROMPT);
 }
 async function extractFacet(session) {
   const cachePath = getCachePath(session.id);
-  if (fs2.existsSync(cachePath)) {
-    const stat = fs2.statSync(cachePath);
+  if (fs3.existsSync(cachePath)) {
+    const stat = fs3.statSync(cachePath);
     if (stat.mtimeMs >= session.updatedAt) {
       try {
-        return JSON.parse(fs2.readFileSync(cachePath, "utf-8"));
+        const facet2 = JSON.parse(fs3.readFileSync(cachePath, "utf-8"));
+        process.stderr.write(`(cached) `);
+        return facet2;
       } catch {
       }
     }
   }
-  const serialized = serializeSession(session);
+  const serialized = serializeSession(session).trim();
+  if (serialized.length < 200) {
+    return {
+      sessionId: session.id,
+      projectName: "Unknown",
+      summary: "Empty session with no messages.",
+      toolsUsed: [],
+      repeatedInstructions: [],
+      frictionPoints: [],
+      codeQualityPatterns: [],
+      workflowPatterns: []
+    };
+  }
   let textForLlm;
   if (serialized.length <= MAX_DIRECT_SIZE) {
     textForLlm = serialized;
@@ -986,28 +300,49 @@ async function extractFacet(session) {
     for (let i = 0; i < serialized.length; i += CHUNK_SIZE) {
       chunks.push(serialized.slice(i, i + CHUNK_SIZE));
     }
-    const summaries = await Promise.all(chunks.map((c) => summarizeChunk(c)));
+    process.stderr.write(`(${chunks.length} chunks, ~${Math.round(serialized.length / 1e3)}k chars) `);
+    const summaries = [];
+    for (let i = 0; i < chunks.length; i++) {
+      process.stderr.write(`chunk ${i + 1}/${chunks.length}... `);
+      summaries.push(await summarizeChunk(chunks[i]));
+    }
     textForLlm = summaries.join("\n\n");
   }
-  const facet = await callFacetLlm(session.id, textForLlm);
-  fs2.mkdirSync(getCacheDir(), { recursive: true });
-  fs2.writeFileSync(cachePath, JSON.stringify(facet, null, 2), "utf-8");
+  const facet = await callFacetLlm(session.id, textForLlm, FACET_SYSTEM_PROMPT);
+  fs3.mkdirSync(getCacheDir(), { recursive: true });
+  fs3.writeFileSync(cachePath, JSON.stringify(facet, null, 2), "utf-8");
   return facet;
 }
 
 // src/aggregator.ts
-var SYNTHESIS_SYSTEM_PROMPT = `You are analyzing aggregated data from multiple coding sessions.
-Produce an InsightReport as valid JSON (no markdown fences) with these fields:
-- generatedAt: ISO timestamp string
-- periodDays: number
-- sessionCount: number
-- projects: Array<{ name, sessionCount, description }>
-- workflowInsights: { strengths: string[], frictionPoints: string[], behavioralProfile: string }
-- codeQualityInsights: { recurringPatterns: string[], recommendations: string[] }
-- opencodeConfigSuggestions: Array<{ description: string, rule: string }> (ready-to-paste opencode.json snippets)
-- featureRecommendations: string[] (opencode features the user isn't leveraging)
+var SYNTHESIS_SYSTEM_PROMPT = `You are analyzing aggregated data from multiple AI coding sessions to produce a personal insights report.
+IMPORTANT: Your ENTIRE response must be a single valid JSON object. Do NOT include any text, explanation, or markdown before or after the JSON. Start your response with { and end with }.
 
-Be specific and actionable. The config suggestions should be copy-pasteable JSON snippets.`;
+Write in second person ("you", "your") throughout. Be specific \u2014 cite actual project names, file paths, tool names, and error messages from the session data. Avoid generic statements; every insight should be traceable to something concrete in the data.
+
+Produce a JSON object with EXACTLY these fields:
+- generatedAt: ISO timestamp string (now)
+- periodDays: number (copy from input)
+- sessionCount: number (copy from input)
+- atAGlance: {
+    workingWell: string (2-3 sentences on what the user does well \u2014 cite a specific win from the sessions),
+    hindering: string (2-3 sentences on the main friction \u2014 cite the specific recurring error or pattern),
+    quickWins: string (1-2 actionable suggestions with concrete "try this" language)
+  }
+- behavioralProfile: string (3-4 sentences characterizing how this user works with AI tools, based on patterns in the data \u2014 specific, not generic)
+- projects: Array<{ name: string, sessionCount: number, description: string }> (describe what actually happened in each project)
+- topTools: Array<{ name: string, count: number }> (aggregate toolsUsed across all facets, count occurrences, return top 6)
+- workflowInsights: {
+    strengths: Array<{ title: string, detail: string }> (2-3 concrete strengths with specifics from session data),
+    frictionPoints: Array<{ title: string, detail: string, examples: string[] }> (2-4 friction points; examples should be actual things that went wrong, like the real error message or action),
+    behavioralProfile: string (copy of the top-level behavioralProfile)
+  }
+- codeQualityInsights: {
+    recurringPatterns: string[] (actual patterns observed, with examples like "assumed paths without checking"),
+    recommendations: string[] (actionable, concrete)
+  }
+- opencodeConfigSuggestions: Array<{ description: string, rule: string }> (copy-pasteable JSON snippets for opencode config)
+- featureRecommendations: Array<{ title: string, why: string }> (opencode features not being used; why explains specifically how it would help this user)`;
 async function synthesizeReport(facets, periodDays) {
   const payload = {
     periodDays,
@@ -1020,9 +355,12 @@ async function synthesizeReport(facets, periodDays) {
   );
   let report;
   try {
-    report = JSON.parse(raw);
+    report = extractJson(raw);
   } catch (e) {
-    throw new Error(`LLM returned invalid JSON for synthesis: ${e}`);
+    throw new Error(`LLM returned invalid JSON for synthesis: ${e}
+
+Raw response:
+${raw.slice(0, 500)}`);
   }
   report.periodDays = periodDays;
   report.sessionCount = facets.length;
@@ -1030,82 +368,235 @@ async function synthesizeReport(facets, periodDays) {
 }
 
 // src/reporter.ts
-import * as fs3 from "node:fs";
-import * as os3 from "node:os";
-import * as path3 from "node:path";
+import * as fs4 from "node:fs";
+import * as os4 from "node:os";
+import * as path4 from "node:path";
 import { execSync } from "node:child_process";
-function escape(s) {
-  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+function esc(s) {
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/'/g, "&#39;");
 }
-function renderList(items) {
-  if (items.length === 0) return "<p><em>None identified.</em></p>";
-  return `<ul>${items.map((i) => `<li>${escape(i)}</li>`).join("")}</ul>`;
+function bar(label, value, max, color) {
+  const pct = max > 0 ? value / max * 100 : 0;
+  return `<div class="bar-row">
+  <div class="bar-label">${esc(label)}</div>
+  <div class="bar-track"><div class="bar-fill" style="width:${pct}%;background:${color}"></div></div>
+  <div class="bar-value">${value}</div>
+</div>`;
 }
-function renderConfigSuggestion(s, idx) {
+function projectCards(report) {
+  return report.projects.map((p) => `
+    <div class="project-area">
+      <div class="area-header">
+        <span class="area-name">${esc(p.name)}</span>
+        <span class="area-count">~${p.sessionCount} session${p.sessionCount !== 1 ? "s" : ""}</span>
+      </div>
+      <div class="area-desc">${esc(p.description)}</div>
+    </div>`).join("");
+}
+function strengthCards(strengths) {
+  if (!strengths?.length) return '<p class="empty">None identified.</p>';
+  return strengths.map((s) => `
+    <div class="big-win">
+      <div class="big-win-title">${esc(s.title)}</div>
+      <div class="big-win-desc">${esc(s.detail)}</div>
+    </div>`).join("");
+}
+function frictionCards(fps) {
+  if (!fps?.length) return '<p class="empty">None identified.</p>';
+  return fps.map((f) => `
+    <div class="friction-category">
+      <div class="friction-title">${esc(f.title)}</div>
+      <div class="friction-desc">${esc(f.detail)}</div>
+      ${f.examples?.length ? `<ul class="friction-examples">${f.examples.map((e) => `<li>${esc(e)}</li>`).join("")}</ul>` : ""}
+    </div>`).join("");
+}
+function configSuggestion(s, idx) {
   return `
-    <div class="suggestion">
-      <p>${escape(s.description)}</p>
-      <pre id="rule-${idx}"><code>${escape(s.rule)}</code></pre>
-      <button onclick="navigator.clipboard.writeText(document.getElementById('rule-${idx}').innerText)">Copy</button>
+    <div class="claude-md-item">
+      <div style="flex:1">
+        <div class="cmd-code" id="rule-${idx}">${esc(s.rule)}</div>
+        <div class="cmd-why">${esc(s.description)}</div>
+      </div>
+      <button class="copy-btn" onclick="navigator.clipboard.writeText(document.getElementById('rule-${idx}').innerText)">Copy</button>
     </div>`;
 }
+function featureCards(features) {
+  if (!features?.length) return '<p class="empty">None identified.</p>';
+  return features.map((f) => `
+    <div class="feature-card">
+      <div class="feature-title">${esc(typeof f === "string" ? f : f.title)}</div>
+      ${typeof f !== "string" && f.why ? `<div class="feature-oneliner">${esc(f.why)}</div>` : ""}
+    </div>`).join("");
+}
+function toolBars(report) {
+  const tools = report.topTools ?? [];
+  if (!tools.length) return '<p class="empty">No tool data available.</p>';
+  const max = tools[0]?.count ?? 1;
+  return tools.map((t) => bar(t.name, t.count, max, "#0891b2")).join("");
+}
 function renderReport(report) {
-  const projectRows = report.projects.map(
-    (p) => `<tr><td>${escape(p.name)}</td><td>${p.sessionCount}</td><td>${escape(p.description)}</td></tr>`
-  ).join("");
-  const configSuggestions = report.opencodeConfigSuggestions.map((s, i) => renderConfigSuggestion(s, i)).join("");
+  const date = report.generatedAt?.slice(0, 10) ?? (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
+  const topToolsMax = report.topTools?.[0]?.count ?? 1;
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>opencode Insights \u2014 ${report.generatedAt.slice(0, 10)}</title>
+  <title>opencode Insights \u2014 ${date}</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <style>
-    body { font-family: system-ui, sans-serif; max-width: 900px; margin: 40px auto; padding: 0 20px; color: #1a1a1a; }
-    h1 { border-bottom: 2px solid #0066cc; padding-bottom: 8px; }
-    h2 { color: #0066cc; margin-top: 40px; }
-    table { width: 100%; border-collapse: collapse; margin: 16px 0; }
-    th, td { text-align: left; padding: 8px 12px; border: 1px solid #ddd; }
-    th { background: #f5f5f5; }
-    .suggestion { background: #f9f9f9; border: 1px solid #ddd; border-radius: 6px; padding: 16px; margin: 12px 0; }
-    pre { background: #1e1e1e; color: #d4d4d4; padding: 12px; border-radius: 4px; overflow-x: auto; }
-    button { margin-top: 8px; padding: 6px 14px; background: #0066cc; color: white; border: none; border-radius: 4px; cursor: pointer; }
-    button:hover { background: #0052a3; }
-    .meta { color: #666; font-size: 0.9em; }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; background: #f8fafc; color: #334155; line-height: 1.65; padding: 48px 24px; }
+    .container { max-width: 800px; margin: 0 auto; }
+    h1 { font-size: 32px; font-weight: 700; color: #0f172a; margin-bottom: 8px; }
+    h2 { font-size: 20px; font-weight: 600; color: #0f172a; margin-top: 48px; margin-bottom: 16px; }
+    .subtitle { color: #64748b; font-size: 15px; margin-bottom: 32px; }
+    .nav-toc { display: flex; flex-wrap: wrap; gap: 8px; margin: 24px 0 32px 0; padding: 16px; background: white; border-radius: 8px; border: 1px solid #e2e8f0; }
+    .nav-toc a { font-size: 12px; color: #64748b; text-decoration: none; padding: 6px 12px; border-radius: 6px; background: #f1f5f9; transition: all 0.15s; }
+    .nav-toc a:hover { background: #e2e8f0; color: #334155; }
+    .stats-row { display: flex; gap: 24px; margin-bottom: 40px; padding: 20px 0; border-top: 1px solid #e2e8f0; border-bottom: 1px solid #e2e8f0; flex-wrap: wrap; }
+    .stat { text-align: center; }
+    .stat-value { font-size: 24px; font-weight: 700; color: #0f172a; }
+    .stat-label { font-size: 11px; color: #64748b; text-transform: uppercase; }
+    .at-a-glance { background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%); border: 1px solid #f59e0b; border-radius: 12px; padding: 20px 24px; margin-bottom: 32px; }
+    .glance-title { font-size: 16px; font-weight: 700; color: #92400e; margin-bottom: 16px; }
+    .glance-sections { display: flex; flex-direction: column; gap: 12px; }
+    .glance-section { font-size: 14px; color: #78350f; line-height: 1.6; }
+    .glance-section strong { color: #92400e; }
+    .project-areas { display: flex; flex-direction: column; gap: 12px; margin-bottom: 32px; }
+    .project-area { background: white; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px; }
+    .area-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+    .area-name { font-weight: 600; font-size: 15px; color: #0f172a; }
+    .area-count { font-size: 12px; color: #64748b; background: #f1f5f9; padding: 2px 8px; border-radius: 4px; }
+    .area-desc { font-size: 14px; color: #475569; line-height: 1.5; }
+    .narrative { background: white; border: 1px solid #e2e8f0; border-radius: 8px; padding: 20px; margin-bottom: 24px; }
+    .narrative p { margin-bottom: 12px; font-size: 14px; color: #475569; line-height: 1.7; }
+    .narrative p:last-child { margin-bottom: 0; }
+    .key-insight { background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 12px 16px; margin-top: 12px; font-size: 14px; color: #166534; }
+    .big-wins { display: flex; flex-direction: column; gap: 12px; margin-bottom: 24px; }
+    .big-win { background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 16px; }
+    .big-win-title { font-weight: 600; font-size: 15px; color: #166534; margin-bottom: 8px; }
+    .big-win-desc { font-size: 14px; color: #15803d; line-height: 1.5; }
+    .friction-categories { display: flex; flex-direction: column; gap: 16px; margin-bottom: 24px; }
+    .friction-category { background: #fef2f2; border: 1px solid #fca5a5; border-radius: 8px; padding: 16px; }
+    .friction-title { font-weight: 600; font-size: 15px; color: #991b1b; margin-bottom: 6px; }
+    .friction-desc { font-size: 13px; color: #7f1d1d; margin-bottom: 10px; }
+    .friction-examples { margin: 0 0 0 20px; font-size: 13px; color: #334155; }
+    .friction-examples li { margin-bottom: 4px; }
+    .claude-md-section { background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 8px; padding: 16px; margin-bottom: 20px; }
+    .claude-md-item { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 8px; padding: 10px 0; border-bottom: 1px solid #dbeafe; }
+    .claude-md-item:last-child { border-bottom: none; }
+    .cmd-code { background: white; padding: 8px 12px; border-radius: 4px; font-size: 12px; color: #1e40af; border: 1px solid #bfdbfe; font-family: monospace; display: block; white-space: pre-wrap; word-break: break-word; }
+    .cmd-why { font-size: 12px; color: #64748b; margin-top: 4px; }
+    .feature-card { background: #f0fdf4; border: 1px solid #86efac; border-radius: 8px; padding: 16px; margin-bottom: 12px; }
+    .feature-title { font-weight: 600; font-size: 15px; color: #0f172a; margin-bottom: 6px; }
+    .feature-oneliner { font-size: 14px; color: #475569; }
+    .charts-row { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin: 24px 0; }
+    .chart-card { background: white; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px; }
+    .chart-title { font-size: 12px; font-weight: 600; color: #64748b; text-transform: uppercase; margin-bottom: 12px; }
+    .bar-row { display: flex; align-items: center; margin-bottom: 6px; }
+    .bar-label { width: 110px; font-size: 11px; color: #475569; flex-shrink: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .bar-track { flex: 1; height: 6px; background: #f1f5f9; border-radius: 3px; margin: 0 8px; }
+    .bar-fill { height: 100%; border-radius: 3px; }
+    .bar-value { width: 32px; font-size: 11px; font-weight: 500; color: #64748b; text-align: right; }
+    .copy-btn { background: #e2e8f0; border: none; border-radius: 4px; padding: 4px 8px; font-size: 11px; cursor: pointer; color: #475569; flex-shrink: 0; }
+    .copy-btn:hover { background: #cbd5e1; }
+    .empty { color: #94a3b8; font-size: 13px; }
+    .section-intro { font-size: 14px; color: #64748b; margin-bottom: 16px; }
+    @media (max-width: 640px) { .charts-row { grid-template-columns: 1fr; } .stats-row { justify-content: center; } }
   </style>
 </head>
 <body>
-  <h1>opencode Insights</h1>
-  <p class="meta">Generated: ${escape(report.generatedAt)} &nbsp;|&nbsp; Period: last ${report.periodDays} days &nbsp;|&nbsp; Sessions: ${report.sessionCount}</p>
+  <div class="container">
+    <h1>opencode Insights</h1>
+    <p class="subtitle">Last ${report.periodDays} days &nbsp;|&nbsp; ${report.sessionCount} sessions analyzed &nbsp;|&nbsp; ${date}</p>
 
-  <h2>Projects</h2>
-  <table>
-    <thead><tr><th>Project</th><th>Sessions</th><th>Description</th></tr></thead>
-    <tbody>${projectRows}</tbody>
-  </table>
+    <div class="at-a-glance">
+      <div class="glance-title">At a Glance</div>
+      <div class="glance-sections">
+        <div class="glance-section"><strong>What&apos;s working:</strong> ${esc(report.atAGlance?.workingWell ?? "")}</div>
+        <div class="glance-section"><strong>What&apos;s hindering you:</strong> ${esc(report.atAGlance?.hindering ?? "")}</div>
+        <div class="glance-section"><strong>Quick wins to try:</strong> ${esc(report.atAGlance?.quickWins ?? "")}</div>
+      </div>
+    </div>
 
-  <h2>Workflow Insights</h2>
-  <h3>Strengths</h3>${renderList(report.workflowInsights.strengths)}
-  <h3>Friction Points</h3>${renderList(report.workflowInsights.frictionPoints)}
-  <h3>Behavioral Profile</h3><p>${escape(report.workflowInsights.behavioralProfile)}</p>
+    <nav class="nav-toc">
+      <a href="#section-work">What You Work On</a>
+      <a href="#section-profile">How You Work</a>
+      <a href="#section-wins">Strengths</a>
+      <a href="#section-friction">Friction Points</a>
+      <a href="#section-quality">Code Quality</a>
+      <a href="#section-config">Config Suggestions</a>
+      <a href="#section-features">Features to Try</a>
+    </nav>
 
-  <h2>Code Quality</h2>
-  <h3>Recurring Patterns</h3>${renderList(report.codeQualityInsights.recurringPatterns)}
-  <h3>Recommendations</h3>${renderList(report.codeQualityInsights.recommendations)}
+    <div class="stats-row">
+      <div class="stat"><div class="stat-value">${report.sessionCount}</div><div class="stat-label">Sessions</div></div>
+      <div class="stat"><div class="stat-value">${report.periodDays}</div><div class="stat-label">Days</div></div>
+      <div class="stat"><div class="stat-value">${report.projects?.length ?? 0}</div><div class="stat-label">Projects</div></div>
+      <div class="stat"><div class="stat-value">${report.workflowInsights?.frictionPoints?.length ?? 0}</div><div class="stat-label">Friction Areas</div></div>
+    </div>
 
-  <h2>opencode Config Suggestions</h2>
-  ${configSuggestions || "<p><em>None identified.</em></p>"}
+    <h2 id="section-work">What You Work On</h2>
+    <div class="project-areas">
+      ${projectCards(report)}
+    </div>
 
-  <h2>Feature Recommendations</h2>
-  ${renderList(report.featureRecommendations)}
+    <div class="charts-row">
+      <div class="chart-card">
+        <div class="chart-title">Top Tools Used</div>
+        ${toolBars(report)}
+      </div>
+      <div class="chart-card">
+        <div class="chart-title">Friction Points Found</div>
+        ${report.workflowInsights?.frictionPoints?.length ? report.workflowInsights.frictionPoints.map((f) => bar(f.title, f.examples?.length ?? 1, Math.max(...report.workflowInsights.frictionPoints.map((fp) => fp.examples?.length ?? 1)), "#ef4444")).join("") : '<p class="empty">None identified.</p>'}
+      </div>
+    </div>
+
+    <h2 id="section-profile">How You Work</h2>
+    <div class="narrative">
+      <p>${esc(report.behavioralProfile ?? report.workflowInsights?.behavioralProfile ?? "")}</p>
+    </div>
+
+    <h2 id="section-wins">Strengths</h2>
+    <div class="big-wins">
+      ${strengthCards(report.workflowInsights?.strengths ?? [])}
+    </div>
+
+    <h2 id="section-friction">Friction Points</h2>
+    <div class="friction-categories">
+      ${frictionCards(report.workflowInsights?.frictionPoints ?? [])}
+    </div>
+
+    <h2 id="section-quality">Code Quality Patterns</h2>
+    <p class="section-intro">Recurring patterns and recommendations from your recent sessions.</p>
+    <div class="narrative">
+      <p><strong>Patterns observed:</strong></p>
+      <ul style="margin: 8px 0 16px 20px; font-size:14px; color:#475569;">
+        ${(report.codeQualityInsights?.recurringPatterns ?? []).map((p) => `<li style="margin-bottom:6px">${esc(p)}</li>`).join("")}
+      </ul>
+      <p><strong>Recommendations:</strong></p>
+      <ul style="margin: 8px 0 0 20px; font-size:14px; color:#475569;">
+        ${(report.codeQualityInsights?.recommendations ?? []).map((r) => `<li style="margin-bottom:6px">${esc(r)}</li>`).join("")}
+      </ul>
+    </div>
+
+    <h2 id="section-config">opencode Config Suggestions</h2>
+    ${report.opencodeConfigSuggestions?.length ? `<div class="claude-md-section">${report.opencodeConfigSuggestions.map((s, i) => configSuggestion(s, i)).join("")}</div>` : '<p class="empty">None identified.</p>'}
+
+    <h2 id="section-features">Features to Try</h2>
+    <p class="section-intro">opencode features you&apos;re not fully using yet.</p>
+    ${featureCards(report.featureRecommendations ?? [])}
+
+  </div>
 </body>
 </html>`;
 }
 function saveAndOpenReport(report) {
-  const dataDir = process.env.OPENCODE_DATA_DIR ?? path3.join(os3.homedir(), ".local", "share", "opencode");
-  const outDir = path3.join(dataDir, "insights");
-  const outPath = path3.join(outDir, "report.html");
-  fs3.mkdirSync(outDir, { recursive: true });
-  fs3.writeFileSync(outPath, renderReport(report), "utf-8");
+  const dataDir = process.env.OPENCODE_DATA_DIR ?? path4.join(os4.homedir(), ".local", "share", "opencode");
+  const outDir = path4.join(dataDir, "insights");
+  const outPath = path4.join(outDir, "report.html");
+  fs4.mkdirSync(outDir, { recursive: true });
+  fs4.writeFileSync(outPath, renderReport(report), "utf-8");
   const opener = process.platform === "win32" ? `start "" "${outPath}"` : process.platform === "darwin" ? `open "${outPath}"` : `xdg-open "${outPath}"`;
   try {
     execSync(opener);
@@ -1118,18 +609,36 @@ function saveAndOpenReport(report) {
 function parseArgs() {
   const args = process.argv.slice(2);
   const daysIdx = args.indexOf("--days");
+  let days = 30;
   if (daysIdx !== -1 && args[daysIdx + 1]) {
     const n = parseInt(args[daysIdx + 1], 10);
     if (isNaN(n) || n < 1) {
       console.error("--days must be a positive integer");
       process.exit(1);
     }
-    return { days: n };
+    days = n;
   }
-  return { days: 30 };
+  const topicIdx = args.indexOf("--topic");
+  const topic = topicIdx !== -1 ? args[topicIdx + 1] : void 0;
+  if (topicIdx !== -1 && !topic) {
+    console.error('--topic requires a value, e.g. --topic "typescript"');
+    process.exit(1);
+  }
+  const limitIdx = args.indexOf("--limit");
+  let limit;
+  if (limitIdx !== -1 && args[limitIdx + 1]) {
+    const n = parseInt(args[limitIdx + 1], 10);
+    if (isNaN(n) || n < 1) {
+      console.error("--limit must be a positive integer");
+      process.exit(1);
+    }
+    limit = n;
+  }
+  const errors = args.includes("--errors");
+  return { days, topic, errors, limit };
 }
 async function main() {
-  const { days } = parseArgs();
+  const { days, topic, errors, limit } = parseArgs();
   process.stderr.write(`Reading sessions from opencode.db... `);
   let sessions;
   try {
@@ -1145,10 +654,37 @@ Error: ${e.message}`);
     console.error(`No sessions found in the last ${days} days.`);
     process.exit(0);
   }
-  process.stderr.write(`Extracting facets... `);
-  const facets = await Promise.all(sessions.map((s) => extractFacet(s)));
-  process.stderr.write(`(${facets.length} processed)
+  if (limit && sessions.length > limit) {
+    sessions = sessions.slice(-limit);
+    process.stderr.write(`Session limit: using ${sessions.length} most recent sessions
 `);
+  }
+  if (topic) {
+    const needle = topic.toLowerCase();
+    const before = sessions.length;
+    sessions = sessions.filter((s) => serializeSession(s).toLowerCase().includes(needle));
+    process.stderr.write(`Topic filter "${topic}": ${sessions.length}/${before} sessions match
+`);
+    if (sessions.length === 0) {
+      console.error(`No sessions matched topic "${topic}".`);
+      process.exit(0);
+    }
+  }
+  const mode = errors ? "error" : "full";
+  process.stderr.write(`Extracting facets [mode: ${mode}] (${sessions.length} sessions)...
+`);
+  const facets = [];
+  for (let i = 0; i < sessions.length; i++) {
+    const s = sessions[i];
+    const label = (s.title ?? s.id.slice(0, 12)).slice(0, 40);
+    process.stderr.write(`  [${i + 1}/${sessions.length}] ${label} ... `);
+    const start = Date.now();
+    const facet = errors ? await extractErrorFacet(s) : await extractFacet(s);
+    const elapsed = ((Date.now() - start) / 1e3).toFixed(1);
+    process.stderr.write(`done (${elapsed}s)
+`);
+    facets.push(facet);
+  }
   process.stderr.write(`Synthesizing report...
 `);
   const report = await synthesizeReport(facets, days);

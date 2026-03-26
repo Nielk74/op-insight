@@ -32,18 +32,31 @@ export type ConfigSuggestion = {
   rule: string
 }
 
+export type ProviderConfig = {
+  provider: 'anthropic' | 'openai'
+  model: string
+  apiKey: string
+}
+
 export type InsightReport = {
   generatedAt: string
   periodDays: number
   sessionCount: number
+  atAGlance: {
+    workingWell: string
+    hindering: string
+    quickWins: string
+  }
+  behavioralProfile: string
   projects: Array<{
     name: string
     sessionCount: number
     description: string
   }>
+  topTools: Array<{ name: string; count: number }>
   workflowInsights: {
-    strengths: string[]
-    frictionPoints: string[]
+    strengths: Array<{ title: string; detail: string }>
+    frictionPoints: Array<{ title: string; detail: string; examples: string[] }>
     behavioralProfile: string
   }
   codeQualityInsights: {
@@ -51,6 +64,6 @@ export type InsightReport = {
     recommendations: string[]
   }
   opencodeConfigSuggestions: ConfigSuggestion[]
-  featureRecommendations: string[]
+  featureRecommendations: Array<{ title: string; why: string }>
 }
 

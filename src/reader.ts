@@ -19,15 +19,16 @@ export function readSessionsFromDb(
 
   const rows = db.prepare(`
     SELECT
-      s.id        AS sid,
-      s.time_created,
-      s.time_updated,
-      s.data      AS sdata,
-      m.id        AS mid,
-      m.time_created AS mtime,
-      m.data      AS mdata,
-      p.id        AS pid,
-      p.data      AS pdata
+      s.id           AS sid,
+      s.project_id   AS sprojectid,
+      s.title        AS stitle,
+      s.time_created AS screated,
+      s.time_updated AS supdated,
+      m.id           AS mid,
+      m.time_created AS mcreated,
+      m.data         AS mdata,
+      p.id           AS pid,
+      p.data         AS pdata
     FROM session s
     LEFT JOIN message m ON m.session_id = s.id
     LEFT JOIN part p ON p.message_id = m.id
@@ -46,14 +47,11 @@ export function readSessionsFromDb(
     const sid = row['sid'] as string
 
     if (!sessionMap.has(sid)) {
-      let sdata: { projectId?: string } = {}
-      try { sdata = JSON.parse(row['sdata'] as string) } catch { continue }
-
       sessionMap.set(sid, {
         id: sid,
-        projectId: sdata.projectId ?? '',
-        createdAt: row['time_created'] as number,
-        updatedAt: row['time_updated'] as number,
+        projectId: (row['sprojectid'] as string) ?? '',
+        createdAt: row['screated'] as number,
+        updatedAt: row['supdated'] as number,
         messages: [],
       })
     }
@@ -76,12 +74,12 @@ export function readSessionsFromDb(
     const pid = row['pid'] as string | null
     if (!pid) continue
 
-    let pdata: { type?: string; content?: string } = {}
+    let pdata: { type?: string; text?: string; content?: string } = {}
     try { pdata = JSON.parse(row['pdata'] as string) } catch { continue }
 
     messageMap.get(mid)!.parts.push({
       type: pdata.type ?? 'text',
-      content: pdata.content ?? '',
+      content: pdata.text ?? pdata.content ?? '',
     })
   }
 

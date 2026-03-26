@@ -7,8 +7,8 @@
     "opencode-insights": "./dist/index.js"
   },
   "scripts": {
-    "build": "esbuild src/index.ts --bundle --platform=node --target=node20 --outfile=dist/index.js --format=esm",
-    "dev": "tsx src/index.ts",
+    "build": "esbuild src/index.ts --bundle --platform=node --target=node20 --outfile=dist/index.js --format=esm --external:better-sqlite3",
+    "dev": "node --no-deprecation --import tsx/esm src/index.ts",
     "test": "vitest run",
     "test:watch": "vitest"
   },
