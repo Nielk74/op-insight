@@ -74,7 +74,7 @@ export const SPA_SCRIPT = `
         i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
       }
       ctx.closePath();
-      ctx.strokeStyle = '#e2e8f0';
+      ctx.strokeStyle = '#d0d7de';
       ctx.lineWidth = 1;
       ctx.stroke();
     });
@@ -83,7 +83,7 @@ export const SPA_SCRIPT = `
       ctx.beginPath();
       ctx.moveTo(cx, cy);
       ctx.lineTo(cx + r * Math.cos(angle(i)), cy + r * Math.sin(angle(i)));
-      ctx.strokeStyle = '#cbd5e1';
+      ctx.strokeStyle = '#d0d7de';
       ctx.stroke();
     }
     // Score polygon
@@ -107,7 +107,7 @@ export const SPA_SCRIPT = `
       ctx.fill();
     });
     // Labels
-    ctx.fillStyle = '#334155';
+    ctx.fillStyle = '#57606a';
     ctx.font = '11px Inter, -apple-system, sans-serif';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
@@ -195,7 +195,8 @@ export const SPA_SCRIPT = `
     var dates = sessions.map(function(s){ return s.date; }).sort();
     var minMs = dates.length ? new Date(dates[0]).getTime() : Date.now();
     var maxMs = dates.length ? new Date(dates[dates.length-1]).getTime() : Date.now();
-    var span = Math.max(maxMs - minMs, 1);
+    var singleDay = minMs === maxMs;
+    var span = singleDay ? 1 : (maxMs - minMs);
     var container = document.getElementById('timeline-rows');
     projects.forEach(function(proj) {
       var row = document.createElement('div');
@@ -205,16 +206,18 @@ export const SPA_SCRIPT = `
       label.textContent = proj;
       var track = document.createElement('div');
       track.className = 'tl-track';
-      sessions.filter(function(s){ return s.projectName === proj; }).forEach(function(s) {
+      var projSessions = sessions.filter(function(s){ return s.projectName === proj; });
+      projSessions.forEach(function(s, idx) {
         var dot = document.createElement('div');
         dot.className = 'tl-dot';
-        var pct = ((new Date(s.date).getTime() - minMs) / span) * 100;
-        var size = 8 + Math.min(s.turnDepth || 0, 8) * 2;
+        var pct = singleDay
+          ? (projSessions.length === 1 ? 50 : (idx / (projSessions.length - 1)) * 90 + 5)
+          : ((new Date(s.date).getTime() - minMs) / span) * 94 + 3;
+        var size = 10 + Math.min(s.turnDepth || 0, 6) * 2;
         dot.style.left = pct + '%';
         dot.style.width = size + 'px';
         dot.style.height = size + 'px';
         dot.style.background = wasteColor(s.wasteScore || 0);
-        dot.style.marginTop = '-' + (size/2) + 'px';
         dot.title = s.date + ' \u00b7 ' + s.firstUserMessage.slice(0, 80);
         dot.addEventListener('click', (function(sid) {
           return function() {
