@@ -76,7 +76,15 @@ export const InsightsPlugin: Plugin = async () => {
         async execute(args) {
           let report: InsightReport
           try {
-            report = JSON.parse(args.report_json) as InsightReport
+            const raw = JSON.parse(args.report_json) as Record<string, unknown>
+            // Normalize atAGlance — models frequently use wrong key names
+            const ag = (raw.atAGlance ?? raw.atAglance ?? raw.at_a_glance ?? {}) as Record<string, unknown>
+            raw.atAGlance = {
+              workingWell: ag.workingWell ?? ag.working_well ?? ag.strengths ?? ag.good ?? '',
+              hindering:   ag.hindering ?? ag.friction ?? ag.challenges ?? ag.bad ?? ag.highFrictionPoints ?? '',
+              quickWins:   ag.quickWins ?? ag.quick_wins ?? ag.wins ?? ag.tips ?? ag.userBehaviors ?? '',
+            }
+            report = raw as unknown as InsightReport
           } catch (e) {
             return `Error: report_json is not valid JSON: ${e}`
           }

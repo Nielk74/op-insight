@@ -147,6 +147,35 @@ export const SPA_SCRIPT = `
     var projects = s.projects || [];
     var featRecs = s.featureRecommendations || [];
 
+    // Computed fallbacks when LLM left fields empty
+    if (!toStr(glance.workingWell)) {
+      var topTools = sessions.flatMap(function(x){return x.toolsUsed||[];});
+      var toolCounts = {};
+      topTools.forEach(function(t){ toolCounts[t] = (toolCounts[t]||0)+1; });
+      var sorted = Object.entries(toolCounts).sort(function(a,b){return b[1]-a[1];}).slice(0,3).map(function(e){return e[0];});
+      glance.workingWell = sorted.length ? 'Most-used tools: ' + sorted.join(', ') + '.' : 'No tool data available.';
+    }
+    if (!toStr(glance.hindering)) {
+      var wastySessions = sessions.filter(function(x){return (x.wasteScore||0)>=3;});
+      var errSessions = sessions.filter(function(x){return (x.errorSnippets||[]).length>0;});
+      if (wastySessions.length) {
+        glance.hindering = wastySessions.length + ' session(s) had high waste scores (repeated tool retries).';
+      } else if (errSessions.length) {
+        glance.hindering = errSessions.length + ' session(s) had tool errors.';
+      } else {
+        glance.hindering = 'No significant friction detected in this period.';
+      }
+    }
+    if (!toStr(glance.quickWins)) {
+      var avgWasteNum = sessions.length ? sessions.reduce(function(a,b){return a+(b.wasteScore||0);},0)/sessions.length : 0;
+      if (avgWasteNum > 2) {
+        glance.quickWins = 'Avg waste score is ' + avgWasteNum.toFixed(1) + '/10 — review sessions with repeated tool errors.';
+      } else {
+        var noFiles = sessions.filter(function(x){return (x.filesTouched||[]).length===0;}).length;
+        glance.quickWins = noFiles > 0 ? noFiles + ' session(s) touched no files — may be exploratory or stuck.' : 'Waste score is low — workflow looks clean.';
+      }
+    }
+
     container.innerHTML =
       '<div class="stats-bar">' +
         '<div class="stat"><div class="stat-val">' + sessions.length + '</div><div class="stat-lbl">Sessions</div></div>' +

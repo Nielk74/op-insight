@@ -12838,6 +12838,35 @@ var SPA_SCRIPT = `
     var projects = s.projects || [];
     var featRecs = s.featureRecommendations || [];
 
+    // Computed fallbacks when LLM left fields empty
+    if (!toStr(glance.workingWell)) {
+      var topTools = sessions.flatMap(function(x){return x.toolsUsed||[];});
+      var toolCounts = {};
+      topTools.forEach(function(t){ toolCounts[t] = (toolCounts[t]||0)+1; });
+      var sorted = Object.entries(toolCounts).sort(function(a,b){return b[1]-a[1];}).slice(0,3).map(function(e){return e[0];});
+      glance.workingWell = sorted.length ? 'Most-used tools: ' + sorted.join(', ') + '.' : 'No tool data available.';
+    }
+    if (!toStr(glance.hindering)) {
+      var wastySessions = sessions.filter(function(x){return (x.wasteScore||0)>=3;});
+      var errSessions = sessions.filter(function(x){return (x.errorSnippets||[]).length>0;});
+      if (wastySessions.length) {
+        glance.hindering = wastySessions.length + ' session(s) had high waste scores (repeated tool retries).';
+      } else if (errSessions.length) {
+        glance.hindering = errSessions.length + ' session(s) had tool errors.';
+      } else {
+        glance.hindering = 'No significant friction detected in this period.';
+      }
+    }
+    if (!toStr(glance.quickWins)) {
+      var avgWasteNum = sessions.length ? sessions.reduce(function(a,b){return a+(b.wasteScore||0);},0)/sessions.length : 0;
+      if (avgWasteNum > 2) {
+        glance.quickWins = 'Avg waste score is ' + avgWasteNum.toFixed(1) + '/10 \u2014 review sessions with repeated tool errors.';
+      } else {
+        var noFiles = sessions.filter(function(x){return (x.filesTouched||[]).length===0;}).length;
+        glance.quickWins = noFiles > 0 ? noFiles + ' session(s) touched no files \u2014 may be exploratory or stuck.' : 'Waste score is low \u2014 workflow looks clean.';
+      }
+    }
+
     container.innerHTML =
       '<div class="stats-bar">' +
         '<div class="stat"><div class="stat-val">' + sessions.length + '</div><div class="stat-lbl">Sessions</div></div>' +
@@ -13335,7 +13364,14 @@ var InsightsPlugin = async () => {
         async execute(args) {
           let report;
           try {
-            report = JSON.parse(args.report_json);
+            const raw = JSON.parse(args.report_json);
+            const ag = raw.atAGlance ?? raw.atAglance ?? raw.at_a_glance ?? {};
+            raw.atAGlance = {
+              workingWell: ag.workingWell ?? ag.working_well ?? ag.strengths ?? ag.good ?? "",
+              hindering: ag.hindering ?? ag.friction ?? ag.challenges ?? ag.bad ?? ag.highFrictionPoints ?? "",
+              quickWins: ag.quickWins ?? ag.quick_wins ?? ag.wins ?? ag.tips ?? ag.userBehaviors ?? ""
+            };
+            report = raw;
           } catch (e) {
             return `Error: report_json is not valid JSON: ${e}`;
           }
