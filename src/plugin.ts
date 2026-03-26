@@ -2,7 +2,7 @@
 import type { Plugin } from '@opencode-ai/plugin'
 import { tool } from '@opencode-ai/plugin'
 import { readSessionFacets } from './reader.js'
-import { renderReport, saveAndOpenReport } from './reporter.js'
+import { saveAndOpenReport } from './reporter.js'
 import type { InsightReport } from './types.js'
 
 const REPORT_SCHEMA_DESC = `
