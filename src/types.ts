@@ -1,41 +1,18 @@
-export type MessagePart = {
-  type: string
-  content: string
-}
+// src/types.ts
 
-export type Message = {
-  role: 'user' | 'assistant'
-  parts: MessagePart[]
-}
-
-export type Session = {
-  id: string
-  projectId: string
-  createdAt: number
-  updatedAt: number
-  messages: Message[]
-}
-
-export type Facet = {
+export type SessionFacet = {
   sessionId: string
-  projectName: string
-  summary: string
-  toolsUsed: string[]
-  repeatedInstructions: string[]
-  frictionPoints: string[]
-  codeQualityPatterns: string[]
-  workflowPatterns: string[]
+  projectName: string        // inferred from file paths or directory
+  date: string               // ISO date string of session creation
+  messageCount: number
+  toolsUsed: string[]        // unique tool names seen in parts
+  errorSnippets: string[]    // up to 5 error lines from assistant messages
+  firstUserMessage: string   // first user message, truncated to 200 chars
 }
 
 export type ConfigSuggestion = {
   description: string
   rule: string
-}
-
-export type ProviderConfig = {
-  provider: 'anthropic' | 'openai'
-  model: string
-  apiKey: string
 }
 
 export type InsightReport = {
@@ -66,4 +43,3 @@ export type InsightReport = {
   opencodeConfigSuggestions: ConfigSuggestion[]
   featureRecommendations: Array<{ title: string; why: string }>
 }
-
