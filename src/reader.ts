@@ -66,7 +66,7 @@ export function readSessionFacets(
   // Group by session
   const sessionMap = new Map<string, {
     createdAt: number
-    messages: Array<{ role: string; parts: Array<{ type: string; text: string }> }>
+    messages: Array<{ role: string; parts: Array<{ type: string; text: string; toolName?: string }> }>
     msgIndex: Map<string, number>
   }>()
 
@@ -80,11 +80,11 @@ export function readSessionFacets(
       sess.msgIndex.set(row.mid, sess.messages.length)
       sess.messages.push({ role: row.mrole ?? 'user', parts: [] })
     }
-    let pdata: { type?: string; text?: string; content?: string } = {}
+    let pdata: { type?: string; text?: string; content?: string; tool?: string } = {}
     try { pdata = JSON.parse(row.pdata) } catch { continue }
     const idx = sess.msgIndex.get(row.mid)
     if (idx === undefined) continue
-    sess.messages[idx].parts.push({ type: pdata.type ?? 'text', text: pdata.text ?? pdata.content ?? '' })
+    sess.messages[idx].parts.push({ type: pdata.type ?? 'text', text: pdata.text ?? pdata.content ?? '', toolName: pdata.tool })
   }
 
   let facets: SessionFacet[] = []
@@ -97,9 +97,8 @@ export function readSessionFacets(
 
     const toolsUsed = Array.from(new Set(
       sess.messages.flatMap(m => m.parts)
-        .map(p => p.type?.toLowerCase() ?? '')
-        .filter(t => KNOWN_TOOLS.some(k => t.includes(k)))
-        .map(t => KNOWN_TOOLS.find(k => t.includes(k))!)
+        .filter(p => p.type === 'tool' && p.toolName)
+        .map(p => p.toolName!)
     ))
 
     const errorSnippets: string[] = []
@@ -111,13 +110,14 @@ export function readSessionFacets(
       }
     }
 
-    const firstUserMsg = sess.messages
+    const rawFirstMsg = sess.messages
       .find(m => m.role === 'user')
-      ?.parts.map(p => p.text).join(' ')
-      .slice(0, 200) ?? ''
+      ?.parts.map(p => p.text).join(' ') ?? ''
+    const firstUserMsg = rawFirstMsg.replace(/^"([\s\S]*?)"\s*$/, '$1').slice(0, 200)
 
     const fullText = allTexts.join(' ')
 
+    if (sess.messages.length === 0) continue
     if (topic && !fullText.toLowerCase().includes(topic.toLowerCase())) continue
     if (errorsOnly && errorSnippets.length === 0) continue
 

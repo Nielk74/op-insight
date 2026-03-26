@@ -244,7 +244,8 @@ export function saveAndOpenReport(report: InsightReport): string {
   const dataDir = process.env.OPENCODE_DATA_DIR
     ?? path.join(os.homedir(), '.local', 'share', 'opencode')
   const outDir = path.join(dataDir, 'insights')
-  const outPath = path.join(outDir, 'report.html')
+  const timestamp = new Date().toISOString().replace(/:/g, '-').slice(0, 19)
+  const outPath = path.join(outDir, `report-${timestamp}.html`)
 
   fs.mkdirSync(outDir, { recursive: true })
   fs.writeFileSync(outPath, renderReport(report), 'utf-8')

@@ -5,32 +5,13 @@ import { readSessionFacets } from './reader.js'
 import { saveAndOpenReport } from './reporter.js'
 import type { InsightReport } from './types.js'
 
-const REPORT_SCHEMA_DESC = `
-InsightReport JSON schema:
-{
-  "generatedAt": "ISO timestamp",
-  "periodDays": number,
-  "sessionCount": number,
-  "atAGlance": { "workingWell": "string", "hindering": "string", "quickWins": "string" },
-  "behavioralProfile": "string",
-  "projects": [{ "name": "string", "sessionCount": number, "description": "string" }],
-  "topTools": [{ "name": "string", "count": number }],
-  "workflowInsights": {
-    "strengths": [{ "title": "string", "detail": "string" }],
-    "frictionPoints": [{ "title": "string", "detail": "string", "examples": ["string"] }],
-    "behavioralProfile": "string"
-  },
-  "codeQualityInsights": { "recurringPatterns": ["string"], "recommendations": ["string"] },
-  "opencodeConfigSuggestions": [{ "description": "string", "rule": "string" }],
-  "featureRecommendations": [{ "title": "string", "why": "string" }]
-}
-Write in second person ("you", "your"). Be specific — cite project names, tool names, and actual error messages from the session data. Every insight must be traceable to something concrete in the data.`
+const REPORT_SCHEMA_DESC = `JSON string with these fields: generatedAt (ISO timestamp), periodDays (number), sessionCount (number), atAGlance ({workingWell, hindering, quickWins}), behavioralProfile (string), projects ([{name, sessionCount, description}]), topTools ([{name, count}]), workflowInsights ({strengths:[{title,detail}], frictionPoints:[{title,detail,examples:[]}], behavioralProfile}), codeQualityInsights ({recurringPatterns:[], recommendations:[]}), opencodeConfigSuggestions ([{description, rule}]), featureRecommendations ([{title, why}]). Write in second person. Cite specific project names, tool names, and error messages from the data.`
 
 export const InsightsPlugin: Plugin = async () => {
   return {
     tool: {
       insights_get_data: tool({
-        description: 'Read opencode session data and return compact per-session facets for analysis. Call this first, then synthesize the data into an InsightReport, then call insights_save_report.',
+        description: 'Read opencode session data and return compact per-session facets for analysis. Step 1 of 2: call this first to get the data, synthesize it into an InsightReport JSON, then ALWAYS call insights_save_report to render and open the HTML report — never skip the save step.',
         args: {
           days: tool.schema.number().default(30).describe('Number of past days to include'),
           limit: tool.schema.number().optional().describe('Max sessions to return (for faster runs)'),
@@ -59,9 +40,9 @@ export const InsightsPlugin: Plugin = async () => {
       }),
 
       insights_save_report: tool({
-        description: `Save an insights report to disk and open it in the browser. Pass a JSON string matching the InsightReport schema.${REPORT_SCHEMA_DESC}`,
+        description: 'Step 2 of 2: save the InsightReport JSON to disk as an HTML report and open it in the browser. Always call this after insights_get_data.',
         args: {
-          report_json: tool.schema.string().describe('JSON string matching InsightReport schema'),
+          report_json: tool.schema.string().describe(REPORT_SCHEMA_DESC),
         },
         async execute(args) {
           let report: InsightReport

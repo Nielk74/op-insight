@@ -47,6 +47,16 @@ npm run build
 >
 > Create it if it doesn't exist yet.
 
+## Testing the plugin
+
+To quickly verify the plugin works end-to-end from the command line:
+
+```bash
+opencode run --dir . "Use the insights_get_data tool with days=30 and limit=5. Call the tool and show me the raw result."
+```
+
+This runs a headless session, invokes `insights_get_data`, and prints the tool output without opening the TUI.
+
 ## Usage
 
 Simply ask opencode to generate a report:

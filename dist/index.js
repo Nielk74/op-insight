@@ -12435,7 +12435,6 @@ function getDbPath() {
   const dataDir = process.env.OPENCODE_DATA_DIR ?? path.join(os.homedir(), ".local", "share", "opencode");
   return path.join(dataDir, "opencode.db");
 }
-var KNOWN_TOOLS = ["bash", "edit", "read", "write", "grep", "glob", "webfetch", "websearch", "task"];
 var ERROR_RE = /error|failed|exit code [^0]|enoent|cannot|not found/i;
 var PATH_RE = /(?:^|\s)([\w.-]+)\/[\w./-]+\.(ts|js|py|lua|go|rs|json|md)/i;
 function inferProject(texts) {
@@ -12490,14 +12489,14 @@ function readSessionFacets(days, currentSessionId, limit, topic, errorsOnly) {
     }
     const idx = sess.msgIndex.get(row.mid);
     if (idx === void 0) continue;
-    sess.messages[idx].parts.push({ type: pdata.type ?? "text", text: pdata.text ?? pdata.content ?? "" });
+    sess.messages[idx].parts.push({ type: pdata.type ?? "text", text: pdata.text ?? pdata.content ?? "", toolName: pdata.tool });
   }
   let facets = [];
   for (const [sid, sess] of sessionMap) {
     const allTexts = sess.messages.flatMap((m) => m.parts.map((p) => p.text));
     const assistantTexts = sess.messages.filter((m) => m.role === "assistant").flatMap((m) => m.parts.map((p) => p.text));
     const toolsUsed = Array.from(new Set(
-      sess.messages.flatMap((m) => m.parts).map((p) => p.type?.toLowerCase() ?? "").filter((t) => KNOWN_TOOLS.some((k) => t.includes(k))).map((t) => KNOWN_TOOLS.find((k) => t.includes(k)))
+      sess.messages.flatMap((m) => m.parts).filter((p) => p.type === "tool" && p.toolName).map((p) => p.toolName)
     ));
     const errorSnippets = [];
     for (const text of assistantTexts) {
@@ -12507,8 +12506,10 @@ function readSessionFacets(days, currentSessionId, limit, topic, errorsOnly) {
         }
       }
     }
-    const firstUserMsg = sess.messages.find((m) => m.role === "user")?.parts.map((p) => p.text).join(" ").slice(0, 200) ?? "";
+    const rawFirstMsg = sess.messages.find((m) => m.role === "user")?.parts.map((p) => p.text).join(" ") ?? "";
+    const firstUserMsg = rawFirstMsg.replace(/^"([\s\S]*?)"\s*$/, "$1").slice(0, 200);
     const fullText = allTexts.join(" ");
+    if (sess.messages.length === 0) continue;
     if (topic && !fullText.toLowerCase().includes(topic.toLowerCase())) continue;
     if (errorsOnly && errorSnippets.length === 0) continue;
     facets.push({
@@ -12751,7 +12752,8 @@ function renderReport(report) {
 function saveAndOpenReport(report) {
   const dataDir = process.env.OPENCODE_DATA_DIR ?? path2.join(os2.homedir(), ".local", "share", "opencode");
   const outDir = path2.join(dataDir, "insights");
-  const outPath = path2.join(outDir, "report.html");
+  const timestamp = (/* @__PURE__ */ new Date()).toISOString().replace(/:/g, "-").slice(0, 19);
+  const outPath = path2.join(outDir, `report-${timestamp}.html`);
   fs2.mkdirSync(outDir, { recursive: true });
   fs2.writeFileSync(outPath, renderReport(report), "utf-8");
   try {
@@ -12768,31 +12770,12 @@ function saveAndOpenReport(report) {
 }
 
 // src/plugin.ts
-var REPORT_SCHEMA_DESC = `
-InsightReport JSON schema:
-{
-  "generatedAt": "ISO timestamp",
-  "periodDays": number,
-  "sessionCount": number,
-  "atAGlance": { "workingWell": "string", "hindering": "string", "quickWins": "string" },
-  "behavioralProfile": "string",
-  "projects": [{ "name": "string", "sessionCount": number, "description": "string" }],
-  "topTools": [{ "name": "string", "count": number }],
-  "workflowInsights": {
-    "strengths": [{ "title": "string", "detail": "string" }],
-    "frictionPoints": [{ "title": "string", "detail": "string", "examples": ["string"] }],
-    "behavioralProfile": "string"
-  },
-  "codeQualityInsights": { "recurringPatterns": ["string"], "recommendations": ["string"] },
-  "opencodeConfigSuggestions": [{ "description": "string", "rule": "string" }],
-  "featureRecommendations": [{ "title": "string", "why": "string" }]
-}
-Write in second person ("you", "your"). Be specific \u2014 cite project names, tool names, and actual error messages from the session data. Every insight must be traceable to something concrete in the data.`;
+var REPORT_SCHEMA_DESC = `JSON string with these fields: generatedAt (ISO timestamp), periodDays (number), sessionCount (number), atAGlance ({workingWell, hindering, quickWins}), behavioralProfile (string), projects ([{name, sessionCount, description}]), topTools ([{name, count}]), workflowInsights ({strengths:[{title,detail}], frictionPoints:[{title,detail,examples:[]}], behavioralProfile}), codeQualityInsights ({recurringPatterns:[], recommendations:[]}), opencodeConfigSuggestions ([{description, rule}]), featureRecommendations ([{title, why}]). Write in second person. Cite specific project names, tool names, and error messages from the data.`;
 var InsightsPlugin = async () => {
   return {
     tool: {
       insights_get_data: tool({
-        description: "Read opencode session data and return compact per-session facets for analysis. Call this first, then synthesize the data into an InsightReport, then call insights_save_report.",
+        description: "Read opencode session data and return compact per-session facets for analysis. Step 1 of 2: call this first to get the data, synthesize it into an InsightReport JSON, then ALWAYS call insights_save_report to render and open the HTML report \u2014 never skip the save step.",
         args: {
           days: tool.schema.number().default(30).describe("Number of past days to include"),
           limit: tool.schema.number().optional().describe("Max sessions to return (for faster runs)"),
@@ -12820,9 +12803,9 @@ var InsightsPlugin = async () => {
         }
       }),
       insights_save_report: tool({
-        description: `Save an insights report to disk and open it in the browser. Pass a JSON string matching the InsightReport schema.${REPORT_SCHEMA_DESC}`,
+        description: "Step 2 of 2: save the InsightReport JSON to disk as an HTML report and open it in the browser. Always call this after insights_get_data.",
         args: {
-          report_json: tool.schema.string().describe("JSON string matching InsightReport schema")
+          report_json: tool.schema.string().describe(REPORT_SCHEMA_DESC)
         },
         async execute(args) {
           let report;
