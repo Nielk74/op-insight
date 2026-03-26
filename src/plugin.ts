@@ -38,13 +38,18 @@ export const InsightsPlugin: Plugin = async () => {
           errors_only: tool.schema.boolean().optional().describe('Only include sessions that had tool errors'),
         },
         async execute(args, context) {
-          const facets = readSessionFacets(
-            args.days,
-            context.sessionID,
-            args.limit,
-            args.topic,
-            args.errors_only
-          )
+          let facets
+          try {
+            facets = readSessionFacets(
+              args.days,
+              context.sessionID,
+              args.limit,
+              args.topic,
+              args.errors_only
+            )
+          } catch (e) {
+            return `Error reading session data: ${e}`
+          }
           return JSON.stringify({
             periodDays: args.days,
             sessionCount: facets.length,
