@@ -735,10 +735,10 @@ function mergeDefs(...defs) {
 function cloneDef(schema) {
   return mergeDefs(schema._zod.def);
 }
-function getElementAtPath(obj, path3) {
-  if (!path3)
+function getElementAtPath(obj, path4) {
+  if (!path4)
     return obj;
-  return path3.reduce((acc, key) => acc?.[key], obj);
+  return path4.reduce((acc, key) => acc?.[key], obj);
 }
 function promiseAllObject(promisesObj) {
   const keys = Object.keys(promisesObj);
@@ -1099,11 +1099,11 @@ function aborted(x, startIndex = 0) {
   }
   return false;
 }
-function prefixIssues(path3, issues) {
+function prefixIssues(path4, issues) {
   return issues.map((iss) => {
     var _a;
     (_a = iss).path ?? (_a.path = []);
-    iss.path.unshift(path3);
+    iss.path.unshift(path4);
     return iss;
   });
 }
@@ -1271,7 +1271,7 @@ function treeifyError(error45, _mapper) {
     return issue2.message;
   };
   const result = { errors: [] };
-  const processError = (error46, path3 = []) => {
+  const processError = (error46, path4 = []) => {
     var _a, _b;
     for (const issue2 of error46.issues) {
       if (issue2.code === "invalid_union" && issue2.errors.length) {
@@ -1281,7 +1281,7 @@ function treeifyError(error45, _mapper) {
       } else if (issue2.code === "invalid_element") {
         processError({ issues: issue2.issues }, issue2.path);
       } else {
-        const fullpath = [...path3, ...issue2.path];
+        const fullpath = [...path4, ...issue2.path];
         if (fullpath.length === 0) {
           result.errors.push(mapper(issue2));
           continue;
@@ -1313,8 +1313,8 @@ function treeifyError(error45, _mapper) {
 }
 function toDotPath(_path) {
   const segs = [];
-  const path3 = _path.map((seg) => typeof seg === "object" ? seg.key : seg);
-  for (const seg of path3) {
+  const path4 = _path.map((seg) => typeof seg === "object" ? seg.key : seg);
+  for (const seg of path4) {
     if (typeof seg === "number")
       segs.push(`[${seg}]`);
     else if (typeof seg === "symbol")
@@ -12431,12 +12431,92 @@ import { Database } from "bun:sqlite";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
+
+// src/compute.ts
+function weekStart(date5) {
+  const d = new Date(date5);
+  const day = d.getDay();
+  const diff = day === 0 ? -6 : 1 - day;
+  d.setDate(d.getDate() + diff);
+  return d.toISOString().slice(0, 10);
+}
+function computeWasteScore(parts) {
+  let score = 0;
+  for (let i = 1; i < parts.length; i++) {
+    if (parts[i].tool === parts[i - 1].tool && parts[i].hasError) {
+      score++;
+    }
+  }
+  return Math.min(score, 10);
+}
+function computeFingerprint(history) {
+  const cutoff = /* @__PURE__ */ new Date();
+  cutoff.setDate(cutoff.getDate() - 90);
+  const cutoffStr = cutoff.toISOString().slice(0, 10);
+  const sessions = deduplicateSessions(history).filter((s) => s.date >= cutoffStr);
+  if (sessions.length === 0) {
+    return { autonomy: 0, breadth: 0, iteration: 0, toolDiversity: 0, outputDensity: 0 };
+  }
+  const autonomy = Math.min(
+    sessions.reduce((s, f) => s + f.turnDepth, 0) / sessions.length / 10,
+    1
+  );
+  const weekProjects = /* @__PURE__ */ new Map();
+  for (const s of sessions) {
+    const w = weekStart(s.date);
+    if (!weekProjects.has(w)) weekProjects.set(w, /* @__PURE__ */ new Set());
+    weekProjects.get(w).add(s.projectName);
+  }
+  const avgProjectsPerWeek = [...weekProjects.values()].reduce((s, p) => s + p.size, 0) / weekProjects.size;
+  const breadth = Math.min(avgProjectsPerWeek / 5, 1);
+  const avgWaste = sessions.reduce((s, f) => s + f.wasteScore, 0) / sessions.length;
+  const iteration = Math.max(0, 1 - avgWaste / 10);
+  const allToolsInWindow = new Set(sessions.flatMap((s) => s.toolsUsed));
+  const allToolsEver = new Set(deduplicateSessions(history).flatMap((s) => s.toolsUsed));
+  const toolDiversity = allToolsEver.size === 0 ? 0 : allToolsInWindow.size / allToolsEver.size;
+  const avgFiles = sessions.reduce((s, f) => s + f.filesTouched.length, 0) / sessions.length;
+  const outputDensity = Math.min(avgFiles / 10, 1);
+  return { autonomy, breadth, iteration, toolDiversity, outputDensity };
+}
+function computeTrends(history) {
+  const unique = deduplicateSessions(history);
+  const today = /* @__PURE__ */ new Date();
+  const points = [];
+  for (let i = 11; i >= 0; i--) {
+    const d = new Date(today);
+    d.setDate(d.getDate() - i * 7);
+    const week = weekStart(d.toISOString().slice(0, 10));
+    const weekEnd = new Date(week);
+    weekEnd.setDate(weekEnd.getDate() + 7);
+    const weekEndStr = weekEnd.toISOString().slice(0, 10);
+    const ws = unique.filter((s) => s.date >= week && s.date < weekEndStr);
+    points.push({
+      week,
+      avgTurnDepth: ws.length === 0 ? 0 : ws.reduce((s, f) => s + f.turnDepth, 0) / ws.length,
+      errorRate: ws.length === 0 ? 0 : ws.filter((s) => s.wasteScore > 0).length / ws.length,
+      toolDiversity: ws.length === 0 ? 0 : new Set(ws.flatMap((s) => s.toolsUsed)).size,
+      avgWasteScore: ws.length === 0 ? 0 : ws.reduce((s, f) => s + f.wasteScore, 0) / ws.length
+    });
+  }
+  return points;
+}
+function deduplicateSessions(history) {
+  const seen = /* @__PURE__ */ new Set();
+  return history.flatMap((e) => e.sessions).filter((s) => {
+    if (seen.has(s.sessionId)) return false;
+    seen.add(s.sessionId);
+    return true;
+  });
+}
+
+// src/reader.ts
 function getDbPath() {
   const dataDir = process.env.OPENCODE_DATA_DIR ?? path.join(os.homedir(), ".local", "share", "opencode");
   return path.join(dataDir, "opencode.db");
 }
 var ERROR_RE = /error|failed|exit code [^0]|enoent|cannot|not found/i;
 var PATH_RE = /(?:^|\s)([\w.-]+)\/[\w./-]+\.(ts|js|py|lua|go|rs|json|md)/i;
+var FILE_TOOLS = /* @__PURE__ */ new Set(["edit", "write", "read"]);
 function inferProject(texts) {
   for (const text of texts) {
     const m = text.match(PATH_RE);
@@ -12455,11 +12535,12 @@ function readSessionFacets(days, currentSessionId, limit, topic, errorsOnly) {
   try {
     rows = db.query(`
       SELECT
-        s.id           AS sid,
-        s.time_created AS screated,
-        m.id           AS mid,
+        s.id             AS sid,
+        s.time_created   AS screated,
+        m.time_created   AS mcreated,
+        m.id             AS mid,
         JSON_EXTRACT(m.data, '$.role') AS mrole,
-        p.data         AS pdata
+        p.data           AS pdata
       FROM session s
       LEFT JOIN message m ON m.session_id = s.id
       LEFT JOIN part p ON p.message_id = m.id
@@ -12473,13 +12554,27 @@ function readSessionFacets(days, currentSessionId, limit, topic, errorsOnly) {
   const sessionMap = /* @__PURE__ */ new Map();
   for (const row of rows) {
     if (!sessionMap.has(row.sid)) {
-      sessionMap.set(row.sid, { createdAt: row.screated, messages: [], msgIndex: /* @__PURE__ */ new Map() });
+      sessionMap.set(row.sid, {
+        createdAt: row.screated,
+        msgTimes: [],
+        messages: [],
+        msgIndex: /* @__PURE__ */ new Map(),
+        toolParts: [],
+        filesTouched: /* @__PURE__ */ new Set(),
+        turnDepth: 0,
+        userCount: 0,
+        assistantCount: 0
+      });
     }
     const sess = sessionMap.get(row.sid);
+    if (row.mcreated) sess.msgTimes.push(row.mcreated);
     if (!row.mid || !row.pdata) continue;
     if (!sess.msgIndex.has(row.mid)) {
       sess.msgIndex.set(row.mid, sess.messages.length);
-      sess.messages.push({ role: row.mrole ?? "user", parts: [] });
+      const role = row.mrole ?? "user";
+      sess.messages.push({ role, parts: [] });
+      if (role === "user") sess.userCount++;
+      else if (role === "assistant") sess.assistantCount++;
     }
     let pdata = {};
     try {
@@ -12489,10 +12584,27 @@ function readSessionFacets(days, currentSessionId, limit, topic, errorsOnly) {
     }
     const idx = sess.msgIndex.get(row.mid);
     if (idx === void 0) continue;
-    sess.messages[idx].parts.push({ type: pdata.type ?? "text", text: pdata.text ?? pdata.content ?? "", toolName: pdata.tool });
+    if (pdata.type === "step-finish") {
+      sess.turnDepth++;
+      continue;
+    }
+    if (pdata.type === "tool" && pdata.tool) {
+      const output = pdata.state?.output ?? "";
+      sess.toolParts.push({ tool: pdata.tool, hasError: ERROR_RE.test(output) });
+      if (FILE_TOOLS.has(pdata.tool.toLowerCase())) {
+        const fp = pdata.state?.input?.file_path ?? pdata.state?.input?.path;
+        if (fp) sess.filesTouched.add(fp);
+      }
+    }
+    sess.messages[idx].parts.push({
+      type: pdata.type ?? "text",
+      text: pdata.text ?? pdata.content ?? "",
+      toolName: pdata.tool
+    });
   }
   let facets = [];
   for (const [sid, sess] of sessionMap) {
+    if (sess.messages.length === 0) continue;
     const allTexts = sess.messages.flatMap((m) => m.parts.map((p) => p.text));
     const assistantTexts = sess.messages.filter((m) => m.role === "assistant").flatMap((m) => m.parts.map((p) => p.text));
     const toolsUsed = Array.from(new Set(
@@ -12507,11 +12619,12 @@ function readSessionFacets(days, currentSessionId, limit, topic, errorsOnly) {
       }
     }
     const rawFirstMsg = sess.messages.find((m) => m.role === "user")?.parts.map((p) => p.text).join(" ") ?? "";
-    const firstUserMsg = rawFirstMsg.replace(/^"([\s\S]*?)"\s*$/, "$1").slice(0, 200);
+    const firstUserMessage = rawFirstMsg.replace(/^"([\s\S]*?)"\s*$/, "$1").slice(0, 200);
     const fullText = allTexts.join(" ");
-    if (sess.messages.length === 0) continue;
     if (topic && !fullText.toLowerCase().includes(topic.toLowerCase())) continue;
-    if (errorsOnly && errorSnippets.length === 0) continue;
+    if (errorsOnly && sess.toolParts.every((p) => !p.hasError)) continue;
+    const sortedTimes = sess.msgTimes.filter(Boolean).sort((a, b) => a - b);
+    const duration3 = sortedTimes.length >= 2 ? sortedTimes[sortedTimes.length - 1] - sortedTimes[0] : 0;
     facets.push({
       sessionId: sid,
       projectName: inferProject(allTexts),
@@ -12519,7 +12632,12 @@ function readSessionFacets(days, currentSessionId, limit, topic, errorsOnly) {
       messageCount: sess.messages.length,
       toolsUsed,
       errorSnippets,
-      firstUserMessage: firstUserMsg
+      firstUserMessage,
+      duration: duration3,
+      wasteScore: computeWasteScore(sess.toolParts),
+      messageCounts: { user: sess.userCount, assistant: sess.assistantCount },
+      filesTouched: Array.from(sess.filesTouched),
+      turnDepth: sess.turnDepth
     });
   }
   if (limit != null) facets = facets.slice(0, limit);
@@ -12527,245 +12645,431 @@ function readSessionFacets(days, currentSessionId, limit, topic, errorsOnly) {
 }
 
 // src/reporter.ts
+import * as fs3 from "fs";
+import * as os2 from "os";
+import * as path3 from "path";
+import { exec } from "child_process";
+
+// src/history.ts
 import * as fs2 from "node:fs";
-import * as os2 from "node:os";
 import * as path2 from "node:path";
-function esc2(s) {
-  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/'/g, "&#39;");
+var HISTORY_FILE = "history.json";
+var PENDING_FILE = ".pending.json";
+function readHistory(dataDir) {
+  const filePath = path2.join(dataDir, HISTORY_FILE);
+  if (!fs2.existsSync(filePath)) return [];
+  try {
+    return JSON.parse(fs2.readFileSync(filePath, "utf-8"));
+  } catch {
+    return [];
+  }
 }
-function bar(label, value, max, color) {
-  const pct = max > 0 ? value / max * 100 : 0;
-  return `<div class="bar-row">
-  <div class="bar-label">${esc2(label)}</div>
-  <div class="bar-track"><div class="bar-fill" style="width:${pct}%;background:${color}"></div></div>
-  <div class="bar-value">${value}</div>
-</div>`;
+function appendToHistory(dataDir, entry) {
+  fs2.mkdirSync(dataDir, { recursive: true });
+  const existing = readHistory(dataDir);
+  const seenIds = new Set(existing.flatMap((e) => e.sessions.map((s) => s.sessionId)));
+  const newSessions = entry.sessions.filter((s) => !seenIds.has(s.sessionId));
+  existing.push({ ...entry, sessions: newSessions });
+  fs2.writeFileSync(path2.join(dataDir, HISTORY_FILE), JSON.stringify(existing, null, 2), "utf-8");
 }
-function projectCards(report) {
-  return report.projects.map((p) => `
-    <div class="project-area">
-      <div class="area-header">
-        <span class="area-name">${esc2(p.name)}</span>
-        <span class="area-count">~${p.sessionCount} session${p.sessionCount !== 1 ? "s" : ""}</span>
-      </div>
-      <div class="area-desc">${esc2(p.description)}</div>
-    </div>`).join("");
+function savePending(dataDir, sessions, periodDays) {
+  fs2.mkdirSync(dataDir, { recursive: true });
+  fs2.writeFileSync(
+    path2.join(dataDir, PENDING_FILE),
+    JSON.stringify({ sessions, periodDays }, null, 2),
+    "utf-8"
+  );
 }
-function strengthCards(strengths) {
-  if (!strengths?.length) return '<p class="empty">None identified.</p>';
-  return strengths.map((s) => `
-    <div class="big-win">
-      <div class="big-win-title">${esc2(s.title)}</div>
-      <div class="big-win-desc">${esc2(s.detail)}</div>
-    </div>`).join("");
+function loadPending(dataDir) {
+  const p = path2.join(dataDir, PENDING_FILE);
+  if (!fs2.existsSync(p)) return null;
+  try {
+    return JSON.parse(fs2.readFileSync(p, "utf-8"));
+  } catch {
+    return null;
+  }
 }
-function frictionCards(fps) {
-  if (!fps?.length) return '<p class="empty">None identified.</p>';
-  return fps.map((f) => `
-    <div class="friction-category">
-      <div class="friction-title">${esc2(f.title)}</div>
-      <div class="friction-desc">${esc2(f.detail)}</div>
-      ${f.examples?.length ? `<ul class="friction-examples">${f.examples.map((e) => `<li>${esc2(e)}</li>`).join("")}</ul>` : ""}
-    </div>`).join("");
+function deletePending(dataDir) {
+  const p = path2.join(dataDir, PENDING_FILE);
+  if (fs2.existsSync(p)) fs2.unlinkSync(p);
 }
-function configSuggestion(s, idx) {
-  return `
-    <div class="claude-md-item">
-      <div style="flex:1">
-        <div class="cmd-code" id="rule-${idx}">${esc2(s.rule)}</div>
-        <div class="cmd-why">${esc2(s.description)}</div>
-      </div>
-      <button class="copy-btn" onclick="navigator.clipboard.writeText(document.getElementById('rule-${idx}').innerText)">Copy</button>
-    </div>`;
+
+// src/spa.ts
+var SPA_SCRIPT = `
+(function () {
+  var data = window.INSIGHTS_DATA;
+  var panels = ['trends', 'fingerprint', 'timeline', 'cards'];
+
+  // \u2500\u2500 Tab Navigation \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+  function showTab(name) {
+    panels.forEach(function(p) {
+      document.getElementById('panel-' + p).style.display = p === name ? 'block' : 'none';
+      document.getElementById('tab-' + p).classList.toggle('active', p === name);
+    });
+  }
+  panels.forEach(function(p) {
+    document.getElementById('tab-' + p).addEventListener('click', function() { showTab(p); });
+  });
+
+  // \u2500\u2500 Canvas Helpers \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+  function drawSparkline(canvas, values, color) {
+    var ctx = canvas.getContext('2d');
+    var w = canvas.width, h = canvas.height, pad = 10;
+    ctx.clearRect(0, 0, w, h);
+    if (!values || !values.length) return;
+    var min = Math.min.apply(null, values);
+    var max = Math.max.apply(null, values);
+    var range = max - min || 1;
+    var pts = values.map(function(v, i) {
+      return [
+        pad + (i / Math.max(values.length - 1, 1)) * (w - pad * 2),
+        (h - pad) - ((v - min) / range) * (h - pad * 2)
+      ];
+    });
+    // Fill area under line
+    ctx.beginPath();
+    ctx.moveTo(pts[0][0], h - pad);
+    pts.forEach(function(p) { ctx.lineTo(p[0], p[1]); });
+    ctx.lineTo(pts[pts.length - 1][0], h - pad);
+    ctx.closePath();
+    ctx.fillStyle = color + '22';
+    ctx.fill();
+    // Line
+    ctx.beginPath();
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 2;
+    pts.forEach(function(p, i) { i === 0 ? ctx.moveTo(p[0], p[1]) : ctx.lineTo(p[0], p[1]); });
+    ctx.stroke();
+    // Last-point dot (current week)
+    var lp = pts[pts.length - 1];
+    ctx.beginPath();
+    ctx.arc(lp[0], lp[1], 4, 0, Math.PI * 2);
+    ctx.fillStyle = color;
+    ctx.fill();
+  }
+
+  function drawRadar(canvas, scores, labels) {
+    var ctx = canvas.getContext('2d');
+    var w = canvas.width, h = canvas.height;
+    var cx = w / 2, cy = h / 2;
+    var r = Math.min(cx, cy) - 40;
+    var n = scores.length;
+    var angle = function(i) { return (i * 2 * Math.PI / n) - Math.PI / 2; };
+    ctx.clearRect(0, 0, w, h);
+    // Grid rings
+    [0.25, 0.5, 0.75, 1].forEach(function(ring) {
+      ctx.beginPath();
+      for (var i = 0; i < n; i++) {
+        var x = cx + r * ring * Math.cos(angle(i));
+        var y = cy + r * ring * Math.sin(angle(i));
+        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+      }
+      ctx.closePath();
+      ctx.strokeStyle = '#e2e8f0';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+    });
+    // Axis lines
+    for (var i = 0; i < n; i++) {
+      ctx.beginPath();
+      ctx.moveTo(cx, cy);
+      ctx.lineTo(cx + r * Math.cos(angle(i)), cy + r * Math.sin(angle(i)));
+      ctx.strokeStyle = '#cbd5e1';
+      ctx.stroke();
+    }
+    // Score polygon
+    ctx.beginPath();
+    scores.forEach(function(s, i) {
+      var x = cx + r * s * Math.cos(angle(i));
+      var y = cy + r * s * Math.sin(angle(i));
+      i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+    });
+    ctx.closePath();
+    ctx.fillStyle = 'rgba(8,145,178,0.15)';
+    ctx.fill();
+    ctx.strokeStyle = '#0891b2';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    // Vertex dots
+    scores.forEach(function(s, i) {
+      ctx.beginPath();
+      ctx.arc(cx + r * s * Math.cos(angle(i)), cy + r * s * Math.sin(angle(i)), 4, 0, Math.PI * 2);
+      ctx.fillStyle = '#0891b2';
+      ctx.fill();
+    });
+    // Labels
+    ctx.fillStyle = '#334155';
+    ctx.font = '11px Inter, -apple-system, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    labels.forEach(function(label, i) {
+      var x = cx + (r + 26) * Math.cos(angle(i));
+      var y = cy + (r + 26) * Math.sin(angle(i));
+      ctx.fillText(label, x, y);
+    });
+  }
+
+  // \u2500\u2500 Trends Panel \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+  function renderTrends() {
+    var trends = data.trends;
+    var configs = [
+      { key: 'avgTurnDepth',  label: 'Avg Turn Depth',   color: '#0891b2', fmt: function(v){ return v.toFixed(1); } },
+      { key: 'errorRate',     label: 'Error Rate',        color: '#ef4444', fmt: function(v){ return (v*100).toFixed(0)+'%'; } },
+      { key: 'toolDiversity', label: 'Tool Diversity',    color: '#8b5cf6', fmt: function(v){ return v.toFixed(1)+' tools'; } },
+      { key: 'avgWasteScore', label: 'Avg Waste Score',   color: '#f59e0b', fmt: function(v){ return v.toFixed(1); } },
+    ];
+    var grid = document.getElementById('trends-grid');
+    configs.forEach(function(cfg) {
+      var values = trends.map(function(t) { return t[cfg.key]; });
+      var latest = values[values.length - 1] || 0;
+      var card = document.createElement('div');
+      card.className = 'spark-card';
+      var canvas = document.createElement('canvas');
+      canvas.width = 200; canvas.height = 60;
+      canvas.className = 'spark-canvas';
+      card.innerHTML =
+        '<div class="spark-label">' + cfg.label + '</div>' +
+        '<div class="spark-value">' + cfg.fmt(latest) + '</div>';
+      card.appendChild(canvas);
+      if (trends.length) {
+        var first = trends[0].week, last = trends[trends.length-1].week;
+        var range = document.createElement('div');
+        range.className = 'spark-weeks';
+        range.textContent = first + ' \u2192 ' + last;
+        card.appendChild(range);
+      }
+      grid.appendChild(card);
+      drawSparkline(canvas, values, cfg.color);
+    });
+  }
+
+  // \u2500\u2500 Fingerprint Panel \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+  function renderFingerprint() {
+    var fp = data.fingerprint;
+    var axes = ['Autonomy', 'Breadth', 'Iteration', 'Tool Diversity', 'Output Density'];
+    var scores = [fp.autonomy, fp.breadth, fp.iteration, fp.toolDiversity, fp.outputDensity];
+    var canvas = document.getElementById('radar-canvas');
+    drawRadar(canvas, scores, axes);
+    var sessions = data.current.sessions;
+    var avgTurnDepth = sessions.length ? (sessions.reduce(function(s,f){return s+f.turnDepth;},0)/sessions.length).toFixed(1) : '0';
+    var allProjects = new Set(sessions.map(function(s){return s.projectName;}));
+    var avgWaste = sessions.length ? (sessions.reduce(function(s,f){return s+f.wasteScore;},0)/sessions.length).toFixed(1) : '0';
+    var allTools = new Set(sessions.flatMap ? sessions.flatMap(function(s){return s.toolsUsed;}) : []);
+    var avgFiles = sessions.length ? (sessions.reduce(function(s,f){return s+(f.filesTouched||[]).length;},0)/sessions.length).toFixed(1) : '0';
+    var descs = [
+      'Autonomy: avg ' + avgTurnDepth + ' turns per session (higher = you let it run longer)',
+      'Breadth: ' + allProjects.size + ' distinct projects this period',
+      'Iteration: avg waste score ' + avgWaste + '/10 (lower is cleaner)',
+      'Tool diversity: ' + allTools.size + ' unique tools used this period',
+      'Output density: avg ' + avgFiles + ' files touched per session',
+    ];
+    var list = document.getElementById('fp-descriptions');
+    descs.forEach(function(d) {
+      var li = document.createElement('li');
+      li.textContent = d;
+      list.appendChild(li);
+    });
+  }
+
+  // \u2500\u2500 Timeline Panel \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+  function wasteColor(score) {
+    if (score <= 1) return '#22c55e';
+    if (score <= 4) return '#f59e0b';
+    return '#ef4444';
+  }
+
+  function renderTimeline() {
+    var sessions = data.current.sessions;
+    var projectSet = {};
+    sessions.forEach(function(s) { projectSet[s.projectName] = true; });
+    var projects = Object.keys(projectSet);
+    var dates = sessions.map(function(s){ return s.date; }).sort();
+    var minMs = dates.length ? new Date(dates[0]).getTime() : Date.now();
+    var maxMs = dates.length ? new Date(dates[dates.length-1]).getTime() : Date.now();
+    var span = Math.max(maxMs - minMs, 1);
+    var container = document.getElementById('timeline-rows');
+    projects.forEach(function(proj) {
+      var row = document.createElement('div');
+      row.className = 'tl-row';
+      var label = document.createElement('div');
+      label.className = 'tl-label';
+      label.textContent = proj;
+      var track = document.createElement('div');
+      track.className = 'tl-track';
+      sessions.filter(function(s){ return s.projectName === proj; }).forEach(function(s) {
+        var dot = document.createElement('div');
+        dot.className = 'tl-dot';
+        var pct = ((new Date(s.date).getTime() - minMs) / span) * 100;
+        var size = 8 + Math.min(s.turnDepth || 0, 8) * 2;
+        dot.style.left = pct + '%';
+        dot.style.width = size + 'px';
+        dot.style.height = size + 'px';
+        dot.style.background = wasteColor(s.wasteScore || 0);
+        dot.style.marginTop = '-' + (size/2) + 'px';
+        dot.title = s.date + ' \xB7 ' + s.firstUserMessage.slice(0, 80);
+        dot.addEventListener('click', (function(sid) {
+          return function() {
+            showTab('cards');
+            setTimeout(function() {
+              var card = document.getElementById('card-' + sid);
+              if (card) {
+                card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                card.classList.add('highlight');
+                setTimeout(function(){ card.classList.remove('highlight'); }, 2000);
+              }
+            }, 60);
+          };
+        })(s.sessionId));
+        track.appendChild(dot);
+      });
+      row.appendChild(label);
+      row.appendChild(track);
+      container.appendChild(row);
+    });
+  }
+
+  // \u2500\u2500 Session Cards Panel \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+  function fmtDuration(ms) {
+    if (!ms || ms < 1000) return '\u2014';
+    var s = Math.floor(ms / 1000);
+    if (s < 60) return s + 's';
+    return Math.floor(s/60) + 'm ' + (s%60) + 's';
+  }
+
+  function esc(str) {
+    return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+
+  function renderCards() {
+    var sessions = data.current.sessions.slice().sort(function(a,b){ return b.date.localeCompare(a.date); });
+    var container = document.getElementById('cards-list');
+    sessions.forEach(function(s) {
+      var card = document.createElement('div');
+      card.className = 'sess-card';
+      card.id = 'card-' + s.sessionId;
+      var wasteBadge = (s.wasteScore || 0) >= 3
+        ? '<span class="waste-badge">\u26A0 waste ' + s.wasteScore + '</span>' : '';
+      var toolPills = (s.toolsUsed || []).map(function(t){ return '<span class="tool-pill">' + esc(t) + '</span>'; }).join('');
+      var fileList = (s.filesTouched || []).length
+        ? '<div class="detail-row"><strong>Files:</strong><ul class="detail-list">' +
+          s.filesTouched.map(function(f){ return '<li>' + esc(f) + '</li>'; }).join('') +
+          '</ul></div>' : '';
+      var errList = (s.errorSnippets || []).length
+        ? '<div class="detail-row"><strong>Errors:</strong><ul class="detail-list">' +
+          s.errorSnippets.map(function(e){ return '<li>' + esc(e) + '</li>'; }).join('') +
+          '</ul></div>' : '';
+      var mc = s.messageCounts || { user: 0, assistant: 0 };
+      card.innerHTML =
+        '<div class="card-header" onclick="this.parentElement.classList.toggle('open')">' +
+          '<div class="card-meta"><span class="card-date">' + esc(s.date) + '</span>' +
+          '<span class="card-project">' + esc(s.projectName) + '</span>' + wasteBadge + '</div>' +
+          '<div class="card-msg">' + esc(s.firstUserMessage.slice(0, 120)) + '</div>' +
+          '<div class="card-tools">' + toolPills + '</div>' +
+        '</div>' +
+        '<div class="card-body">' +
+          '<div class="detail-row"><strong>Turns:</strong> ' + (s.turnDepth||0) +
+          ' &nbsp;&middot;&nbsp; <strong>Duration:</strong> ' + fmtDuration(s.duration) + '</div>' +
+          '<div class="detail-row"><strong>Messages:</strong> ' + mc.user + ' user &nbsp;&middot;&nbsp; ' + mc.assistant + ' assistant</div>' +
+          fileList + errList +
+        '</div>';
+      container.appendChild(card);
+    });
+  }
+
+  // \u2500\u2500 Init \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+  showTab('trends');
+  renderTrends();
+  renderFingerprint();
+  renderTimeline();
+  renderCards();
+})();
+`;
+
+// src/reporter.ts
+function getInsightsDir() {
+  const dir = path3.join(os2.homedir(), ".local", "share", "opencode", "insights");
+  fs3.mkdirSync(dir, { recursive: true });
+  return dir;
 }
-function featureCards(features) {
-  if (!features?.length) return '<p class="empty">None identified.</p>';
-  return features.map((f) => `
-    <div class="feature-card">
-      <div class="feature-title">${esc2(typeof f === "string" ? f : f.title)}</div>
-      ${typeof f !== "string" && f.why ? `<div class="feature-oneliner">${esc2(f.why)}</div>` : ""}
-    </div>`).join("");
-}
-function toolBars(report) {
-  const tools = report.topTools ?? [];
-  if (!tools.length) return '<p class="empty">No tool data available.</p>';
-  const max = tools[0]?.count ?? 1;
-  return tools.map((t) => bar(t.name, t.count, max, "#0891b2")).join("");
-}
-function renderReport(report) {
-  const date5 = report.generatedAt?.slice(0, 10) ?? (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
-  const topToolsMax = report.topTools?.[0]?.count ?? 1;
+function renderReport(data) {
+  const date5 = data.current.runAt?.slice(0, 10) ?? (/* @__PURE__ */ new Date()).toISOString().slice(0, 10);
+  const dataJson = JSON.stringify(data);
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>opencode Insights \u2014 ${date5}</title>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>opencode insights \u2014 ${date5}</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; background: #f8fafc; color: #334155; line-height: 1.65; padding: 48px 24px; }
-    .container { max-width: 800px; margin: 0 auto; }
-    h1 { font-size: 32px; font-weight: 700; color: #0f172a; margin-bottom: 8px; }
-    h2 { font-size: 20px; font-weight: 600; color: #0f172a; margin-top: 48px; margin-bottom: 16px; }
-    .subtitle { color: #64748b; font-size: 15px; margin-bottom: 32px; }
-    .nav-toc { display: flex; flex-wrap: wrap; gap: 8px; margin: 24px 0 32px 0; padding: 16px; background: white; border-radius: 8px; border: 1px solid #e2e8f0; }
-    .nav-toc a { font-size: 12px; color: #64748b; text-decoration: none; padding: 6px 12px; border-radius: 6px; background: #f1f5f9; transition: all 0.15s; }
-    .nav-toc a:hover { background: #e2e8f0; color: #334155; }
-    .stats-row { display: flex; gap: 24px; margin-bottom: 40px; padding: 20px 0; border-top: 1px solid #e2e8f0; border-bottom: 1px solid #e2e8f0; flex-wrap: wrap; }
-    .stat { text-align: center; }
-    .stat-value { font-size: 24px; font-weight: 700; color: #0f172a; }
-    .stat-label { font-size: 11px; color: #64748b; text-transform: uppercase; }
-    .at-a-glance { background: linear-gradient(135deg, #fef3c7 0%, #fde68a 100%); border: 1px solid #f59e0b; border-radius: 12px; padding: 20px 24px; margin-bottom: 32px; }
-    .glance-title { font-size: 16px; font-weight: 700; color: #92400e; margin-bottom: 16px; }
-    .glance-sections { display: flex; flex-direction: column; gap: 12px; }
-    .glance-section { font-size: 14px; color: #78350f; line-height: 1.6; }
-    .glance-section strong { color: #92400e; }
-    .project-areas { display: flex; flex-direction: column; gap: 12px; margin-bottom: 32px; }
-    .project-area { background: white; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px; }
-    .area-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
-    .area-name { font-weight: 600; font-size: 15px; color: #0f172a; }
-    .area-count { font-size: 12px; color: #64748b; background: #f1f5f9; padding: 2px 8px; border-radius: 4px; }
-    .area-desc { font-size: 14px; color: #475569; line-height: 1.5; }
-    .narrative { background: white; border: 1px solid #e2e8f0; border-radius: 8px; padding: 20px; margin-bottom: 24px; }
-    .narrative p { margin-bottom: 12px; font-size: 14px; color: #475569; line-height: 1.7; }
-    .narrative p:last-child { margin-bottom: 0; }
-    .key-insight { background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 12px 16px; margin-top: 12px; font-size: 14px; color: #166534; }
-    .big-wins { display: flex; flex-direction: column; gap: 12px; margin-bottom: 24px; }
-    .big-win { background: #f0fdf4; border: 1px solid #bbf7d0; border-radius: 8px; padding: 16px; }
-    .big-win-title { font-weight: 600; font-size: 15px; color: #166534; margin-bottom: 8px; }
-    .big-win-desc { font-size: 14px; color: #15803d; line-height: 1.5; }
-    .friction-categories { display: flex; flex-direction: column; gap: 16px; margin-bottom: 24px; }
-    .friction-category { background: #fef2f2; border: 1px solid #fca5a5; border-radius: 8px; padding: 16px; }
-    .friction-title { font-weight: 600; font-size: 15px; color: #991b1b; margin-bottom: 6px; }
-    .friction-desc { font-size: 13px; color: #7f1d1d; margin-bottom: 10px; }
-    .friction-examples { margin: 0 0 0 20px; font-size: 13px; color: #334155; }
-    .friction-examples li { margin-bottom: 4px; }
-    .claude-md-section { background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 8px; padding: 16px; margin-bottom: 20px; }
-    .claude-md-item { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 8px; padding: 10px 0; border-bottom: 1px solid #dbeafe; }
-    .claude-md-item:last-child { border-bottom: none; }
-    .cmd-code { background: white; padding: 8px 12px; border-radius: 4px; font-size: 12px; color: #1e40af; border: 1px solid #bfdbfe; font-family: monospace; display: block; white-space: pre-wrap; word-break: break-word; }
-    .cmd-why { font-size: 12px; color: #64748b; margin-top: 4px; }
-    .feature-card { background: #f0fdf4; border: 1px solid #86efac; border-radius: 8px; padding: 16px; margin-bottom: 12px; }
-    .feature-title { font-weight: 600; font-size: 15px; color: #0f172a; margin-bottom: 6px; }
-    .feature-oneliner { font-size: 14px; color: #475569; }
-    .charts-row { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin: 24px 0; }
-    .chart-card { background: white; border: 1px solid #e2e8f0; border-radius: 8px; padding: 16px; }
-    .chart-title { font-size: 12px; font-weight: 600; color: #64748b; text-transform: uppercase; margin-bottom: 12px; }
-    .bar-row { display: flex; align-items: center; margin-bottom: 6px; }
-    .bar-label { width: 110px; font-size: 11px; color: #475569; flex-shrink: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .bar-track { flex: 1; height: 6px; background: #f1f5f9; border-radius: 3px; margin: 0 8px; }
-    .bar-fill { height: 100%; border-radius: 3px; }
-    .bar-value { width: 32px; font-size: 11px; font-weight: 500; color: #64748b; text-align: right; }
-    .copy-btn { background: #e2e8f0; border: none; border-radius: 4px; padding: 4px 8px; font-size: 11px; cursor: pointer; color: #475569; flex-shrink: 0; }
-    .copy-btn:hover { background: #cbd5e1; }
-    .empty { color: #94a3b8; font-size: 13px; }
-    .section-intro { font-size: 14px; color: #64748b; margin-bottom: 16px; }
-    @media (max-width: 640px) { .charts-row { grid-template-columns: 1fr; } .stats-row { justify-content: center; } }
+    body { font-family: system-ui, sans-serif; background: #0d1117; color: #e6edf3; min-height: 100vh; }
+    nav { position: sticky; top: 0; background: #161b22; border-bottom: 1px solid #30363d; padding: 0 1rem; display: flex; align-items: center; gap: 1rem; z-index: 10; }
+    nav h1 { font-size: .9rem; color: #8b949e; padding: .75rem 0; flex: 1; }
+    nav button { background: none; border: none; color: #8b949e; padding: .75rem .5rem; cursor: pointer; font-size: .85rem; border-bottom: 2px solid transparent; }
+    nav button.active { color: #58a6ff; border-bottom-color: #58a6ff; }
+    .panel { display: none; padding: 1.5rem; max-width: 1100px; margin: 0 auto; }
+    .panel.active { display: block; }
+    .card { background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 1rem; margin-bottom: .75rem; cursor: pointer; }
+    .card-header { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; }
+    .card-body { display: none; margin-top: .75rem; border-top: 1px solid #30363d; padding-top: .75rem; }
+    .card.open .card-body { display: block; }
+    .pill { font-size: .7rem; background: #21262d; border: 1px solid #30363d; border-radius: 4px; padding: 2px 6px; }
+    .waste-badge { font-size: .7rem; background: #da3633; border-radius: 4px; padding: 2px 6px; color: #fff; }
+    .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+    .spark-card { background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 1rem; }
+    .spark-label { font-size: .8rem; color: #8b949e; margin-bottom: .5rem; }
+    .tl-row { display: flex; align-items: center; gap: .75rem; margin-bottom: .5rem; }
+    .tl-label { font-size: .8rem; color: #8b949e; width: 140px; flex-shrink: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .tl-track { flex: 1; position: relative; height: 24px; }
+    .fp-desc { font-size: .85rem; color: #8b949e; margin-top: .5rem; line-height: 1.6; }
+    .fp-desc li { margin-bottom: .25rem; list-style: none; }
+    canvas { display: block; }
   </style>
 </head>
 <body>
-  <div class="container">
-    <h1>opencode Insights</h1>
-    <p class="subtitle">Last ${report.periodDays} days &nbsp;|&nbsp; ${report.sessionCount} sessions analyzed &nbsp;|&nbsp; ${date5}</p>
-
-    <div class="at-a-glance">
-      <div class="glance-title">At a Glance</div>
-      <div class="glance-sections">
-        <div class="glance-section"><strong>What&apos;s working:</strong> ${esc2(report.atAGlance?.workingWell ?? "")}</div>
-        <div class="glance-section"><strong>What&apos;s hindering you:</strong> ${esc2(report.atAGlance?.hindering ?? "")}</div>
-        <div class="glance-section"><strong>Quick wins to try:</strong> ${esc2(report.atAGlance?.quickWins ?? "")}</div>
-      </div>
-    </div>
-
-    <nav class="nav-toc">
-      <a href="#section-work">What You Work On</a>
-      <a href="#section-profile">How You Work</a>
-      <a href="#section-wins">Strengths</a>
-      <a href="#section-friction">Friction Points</a>
-      <a href="#section-quality">Code Quality</a>
-      <a href="#section-config">Config Suggestions</a>
-      <a href="#section-features">Features to Try</a>
-    </nav>
-
-    <div class="stats-row">
-      <div class="stat"><div class="stat-value">${report.sessionCount}</div><div class="stat-label">Sessions</div></div>
-      <div class="stat"><div class="stat-value">${report.periodDays}</div><div class="stat-label">Days</div></div>
-      <div class="stat"><div class="stat-value">${report.projects?.length ?? 0}</div><div class="stat-label">Projects</div></div>
-      <div class="stat"><div class="stat-value">${report.workflowInsights?.frictionPoints?.length ?? 0}</div><div class="stat-label">Friction Areas</div></div>
-    </div>
-
-    <h2 id="section-work">What You Work On</h2>
-    <div class="project-areas">
-      ${projectCards(report)}
-    </div>
-
-    <div class="charts-row">
-      <div class="chart-card">
-        <div class="chart-title">Top Tools Used</div>
-        ${toolBars(report)}
-      </div>
-      <div class="chart-card">
-        <div class="chart-title">Friction Points Found</div>
-        ${report.workflowInsights?.frictionPoints?.length ? report.workflowInsights.frictionPoints.map((f) => bar(f.title, f.examples?.length ?? 1, Math.max(...report.workflowInsights.frictionPoints.map((fp) => fp.examples?.length ?? 1)), "#ef4444")).join("") : '<p class="empty">None identified.</p>'}
-      </div>
-    </div>
-
-    <h2 id="section-profile">How You Work</h2>
-    <div class="narrative">
-      <p>${esc2(report.behavioralProfile ?? report.workflowInsights?.behavioralProfile ?? "")}</p>
-    </div>
-
-    <h2 id="section-wins">Strengths</h2>
-    <div class="big-wins">
-      ${strengthCards(report.workflowInsights?.strengths ?? [])}
-    </div>
-
-    <h2 id="section-friction">Friction Points</h2>
-    <div class="friction-categories">
-      ${frictionCards(report.workflowInsights?.frictionPoints ?? [])}
-    </div>
-
-    <h2 id="section-quality">Code Quality Patterns</h2>
-    <p class="section-intro">Recurring patterns and recommendations from your recent sessions.</p>
-    <div class="narrative">
-      <p><strong>Patterns observed:</strong></p>
-      <ul style="margin: 8px 0 16px 20px; font-size:14px; color:#475569;">
-        ${(report.codeQualityInsights?.recurringPatterns ?? []).map((p) => `<li style="margin-bottom:6px">${esc2(p)}</li>`).join("")}
-      </ul>
-      <p><strong>Recommendations:</strong></p>
-      <ul style="margin: 8px 0 0 20px; font-size:14px; color:#475569;">
-        ${(report.codeQualityInsights?.recommendations ?? []).map((r) => `<li style="margin-bottom:6px">${esc2(r)}</li>`).join("")}
-      </ul>
-    </div>
-
-    <h2 id="section-config">opencode Config Suggestions</h2>
-    ${report.opencodeConfigSuggestions?.length ? `<div class="claude-md-section">${report.opencodeConfigSuggestions.map((s, i) => configSuggestion(s, i)).join("")}</div>` : '<p class="empty">None identified.</p>'}
-
-    <h2 id="section-features">Features to Try</h2>
-    <p class="section-intro">opencode features you&apos;re not fully using yet.</p>
-    ${featureCards(report.featureRecommendations ?? [])}
-
-  </div>
+  <nav>
+    <h1 id="nav-title"></h1>
+    <button onclick="showTab('trends')" id="tab-trends">Trends</button>
+    <button onclick="showTab('fingerprint')" id="tab-fingerprint">Fingerprint</button>
+    <button onclick="showTab('timeline')" id="tab-timeline">Timeline</button>
+    <button onclick="showTab('cards')" id="tab-cards">Sessions</button>
+  </nav>
+  <div id="panel-trends" class="panel"></div>
+  <div id="panel-fingerprint" class="panel"></div>
+  <div id="panel-timeline" class="panel"></div>
+  <div id="panel-cards" class="panel"></div>
+  <script>const INSIGHTS_DATA = ${dataJson};</script>
+  <script>${SPA_SCRIPT}</script>
 </body>
 </html>`;
 }
 function saveAndOpenReport(report) {
-  const dataDir = process.env.OPENCODE_DATA_DIR ?? path2.join(os2.homedir(), ".local", "share", "opencode");
-  const outDir = path2.join(dataDir, "insights");
-  const timestamp = (/* @__PURE__ */ new Date()).toISOString().replace(/:/g, "-").slice(0, 19);
-  const outPath = path2.join(outDir, `report-${timestamp}.html`);
-  fs2.mkdirSync(outDir, { recursive: true });
-  fs2.writeFileSync(outPath, renderReport(report), "utf-8");
+  const insightsDir = getInsightsDir();
+  const pending = loadPending(insightsDir);
+  const sessions = pending?.sessions ?? [];
+  const periodDays = pending?.periodDays ?? report.periodDays;
+  const runAt = (/* @__PURE__ */ new Date()).toISOString();
+  const entry = { runAt, periodDays, sessions };
+  appendToHistory(insightsDir, entry);
+  const history = readHistory(insightsDir);
+  const fingerprint = computeFingerprint(history);
+  const trends = computeTrends(history);
+  const data = { current: entry, history, fingerprint, trends };
+  const html = renderReport(data);
+  const timestamp = runAt.replace(/[:.]/g, "-").slice(0, 23);
+  const outPath = path3.join(insightsDir, `report-${timestamp}.html`);
+  fs3.writeFileSync(outPath, html, "utf-8");
   try {
     if (process.platform === "win32") {
-      Bun.spawn(["cmd", "/c", "start", "", outPath]);
+      exec(`start "" "${outPath}"`);
     } else if (process.platform === "darwin") {
-      Bun.spawn(["open", outPath]);
+      exec(`open "${outPath}"`);
     } else {
-      Bun.spawn(["xdg-open", outPath]);
+      exec(`xdg-open "${outPath}"`);
     }
   } catch {
   }
+  deletePending(insightsDir);
   return outPath;
 }
 
@@ -12794,6 +13098,10 @@ var InsightsPlugin = async () => {
             );
           } catch (e) {
             return `Error reading session data: ${e}`;
+          }
+          try {
+            savePending(getInsightsDir(), facets, args.days);
+          } catch (_) {
           }
           return JSON.stringify({
             periodDays: args.days,
