@@ -1,6 +1,7 @@
 {
   "name": "opencode-insights",
-  "version": "0.2.0",
+  "version": "2026.3.26",
+  "files": ["dist", ".opencode", "README.md"],
   "description": "opencode plugin: generate insights reports from your session history",
   "type": "module",
   "main": "dist/index.js",
