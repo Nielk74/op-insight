@@ -15,6 +15,7 @@ export const SPA_SCRIPT = `
       document.getElementById('tab-' + p).classList.toggle('active', p === name);
     });
   }
+  window.showTab = showTab;
   panels.forEach(function(p) {
     document.getElementById('tab-' + p).addEventListener('click', function() { showTab(p); });
   });
@@ -286,6 +287,11 @@ export const SPA_SCRIPT = `
 
   // ── Init ────────────────────────────────────────────────────────
   showTab('trends');
+  var titleEl = document.getElementById('nav-title');
+  if (titleEl) {
+    var d = new Date(data.current.runAt);
+    titleEl.textContent = data.current.periodDays + 'd \u00b7 ' + data.current.sessions.length + ' sessions \u00b7 ' + d.toLocaleDateString();
+  }
   renderTrends();
   renderFingerprint();
   renderTimeline();

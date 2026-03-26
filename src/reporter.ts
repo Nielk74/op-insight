@@ -47,6 +47,16 @@ export function renderReport(data: InsightsData): string {
     .fp-desc { font-size: .85rem; color: #8b949e; margin-top: .5rem; line-height: 1.6; }
     .fp-desc li { margin-bottom: .25rem; list-style: none; }
     canvas { display: block; }
+    .tl-dot { position: absolute; border-radius: 50%; cursor: pointer; transform: translate(-50%, -50%); top: 50%; }
+    .sess-card { background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: .75rem 1rem; margin-bottom: .5rem; cursor: pointer; }
+    .sess-card.open .card-body { display: block; }
+    .tool-pill { font-size: .7rem; background: #21262d; border: 1px solid #30363d; border-radius: 4px; padding: 2px 6px; margin: 2px; display: inline-block; }
+    .card-meta { font-size: .75rem; color: #8b949e; margin-top: .25rem; }
+    .card-date { font-weight: 600; margin-right: .5rem; }
+    .card-project { color: #58a6ff; }
+    .spark-value { font-size: 1.2rem; font-weight: 600; margin-bottom: .25rem; }
+    .spark-weeks { font-size: .7rem; color: #8b949e; text-align: right; margin-top: .25rem; }
+    .highlight { background: rgba(88, 166, 255, .15); }
   </style>
 </head>
 <body>
@@ -57,10 +67,10 @@ export function renderReport(data: InsightsData): string {
     <button onclick="showTab('timeline')" id="tab-timeline">Timeline</button>
     <button onclick="showTab('cards')" id="tab-cards">Sessions</button>
   </nav>
-  <div id="panel-trends" class="panel"></div>
-  <div id="panel-fingerprint" class="panel"></div>
-  <div id="panel-timeline" class="panel"></div>
-  <div id="panel-cards" class="panel"></div>
+  <div id="panel-trends" class="panel"><div id="trends-grid" class="grid2"></div></div>
+  <div id="panel-fingerprint" class="panel"><canvas id="radar-canvas" width="400" height="340"></canvas><ul id="fp-descriptions" class="fp-desc"></ul></div>
+  <div id="panel-timeline" class="panel"><div id="timeline-rows"></div></div>
+  <div id="panel-cards" class="panel"><div id="cards-list"></div></div>
   <script>const INSIGHTS_DATA = ${dataJson};</script>
   <script>${SPA_SCRIPT}</script>
 </body>
@@ -77,12 +87,12 @@ export function saveAndOpenReport(report: InsightReport): string {
   const runAt = new Date().toISOString()
   const entry: HistoryEntry = { runAt, periodDays, sessions }
 
+  const historyBefore = readHistory(insightsDir)
   appendToHistory(insightsDir, entry)
-  const history = readHistory(insightsDir)
-  const fingerprint = computeFingerprint(history)
-  const trends = computeTrends(history)
+  const fingerprint = computeFingerprint([...historyBefore, entry])
+  const trends = computeTrends([...historyBefore, entry])
 
-  const data: InsightsData = { current: entry, history, fingerprint, trends }
+  const data: InsightsData = { current: entry, history: historyBefore, fingerprint, trends }
   const html = renderReport(data)
 
   const timestamp = runAt.replace(/[:.]/g, '-').slice(0, 23)

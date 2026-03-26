@@ -9,9 +9,9 @@ export type ToolPartSummary = {
 /** Returns the ISO date string of the Monday of the week containing `date`. */
 export function weekStart(date: string): string {
   const d = new Date(date)
-  const day = d.getDay() // 0=Sun
-  const diff = day === 0 ? -6 : 1 - day
-  d.setDate(d.getDate() + diff)
+  const day = d.getUTCDay() // 0=Sun
+  const diff = (day === 0) ? -6 : 1 - day
+  d.setUTCDate(d.getUTCDate() + diff)
   return d.toISOString().slice(0, 10)
 }
 
@@ -22,7 +22,7 @@ export function weekStart(date: string): string {
 export function computeWasteScore(parts: ToolPartSummary[]): number {
   let score = 0
   for (let i = 1; i < parts.length; i++) {
-    if (parts[i].tool === parts[i - 1].tool && parts[i].hasError) {
+    if (parts[i].tool === parts[i - 1].tool && (parts[i].hasError || parts[i - 1].hasError)) {
       score++
     }
   }
