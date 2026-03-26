@@ -1,7 +1,6 @@
 import * as fs from 'node:fs'
 import * as os from 'node:os'
 import * as path from 'node:path'
-import { execSync } from 'node:child_process'
 import type { InsightReport, ConfigSuggestion } from './types.js'
 
 function esc(s: string): string {
@@ -250,12 +249,15 @@ export function saveAndOpenReport(report: InsightReport): string {
   fs.mkdirSync(outDir, { recursive: true })
   fs.writeFileSync(outPath, renderReport(report), 'utf-8')
 
-  const opener =
-    process.platform === 'win32' ? `start "" "${outPath}"` :
-    process.platform === 'darwin' ? `open "${outPath}"` :
-    `xdg-open "${outPath}"`
-
-  try { execSync(opener) } catch { /* ignore if browser open fails */ }
+  try {
+    if (process.platform === 'win32') {
+      Bun.spawn(['cmd', '/c', 'start', '', outPath])
+    } else if (process.platform === 'darwin') {
+      Bun.spawn(['open', outPath])
+    } else {
+      Bun.spawn(['xdg-open', outPath])
+    }
+  } catch { /* ignore if browser open fails */ }
 
   return outPath
 }
