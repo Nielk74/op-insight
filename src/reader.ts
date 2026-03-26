@@ -43,44 +43,48 @@ export function readSessionFacets(
     mrole: string | null; pdata: string | null
   }
 
-  const rows = db.query<Row, unknown[]>(`
-    SELECT
-      s.id           AS sid,
-      s.time_created AS screated,
-      m.id           AS mid,
-      JSON_EXTRACT(m.data, '$.role') AS mrole,
-      p.data         AS pdata
-    FROM session s
-    LEFT JOIN message m ON m.session_id = s.id
-    LEFT JOIN part p ON p.message_id = m.id
-    WHERE s.time_created > ?
-    ${currentSessionId ? 'AND s.id != ?' : ''}
-    ORDER BY s.time_created DESC, m.time_created, p.id
-  `).all(currentSessionId ? [cutoff, currentSessionId] : [cutoff])
-
-  db.close()
+  let rows: Row[]
+  try {
+    rows = db.query<Row, unknown[]>(`
+      SELECT
+        s.id           AS sid,
+        s.time_created AS screated,
+        m.id           AS mid,
+        JSON_EXTRACT(m.data, '$.role') AS mrole,
+        p.data         AS pdata
+      FROM session s
+      LEFT JOIN message m ON m.session_id = s.id
+      LEFT JOIN part p ON p.message_id = m.id
+      WHERE s.time_created > ?
+      ${currentSessionId ? 'AND s.id != ?' : ''}
+      ORDER BY s.time_created DESC, m.time_created, p.id
+    `).all(currentSessionId ? [cutoff, currentSessionId] : [cutoff])
+  } finally {
+    db.close()
+  }
 
   // Group by session
   const sessionMap = new Map<string, {
     createdAt: number
     messages: Array<{ role: string; parts: Array<{ type: string; text: string }> }>
-    msgSet: Set<string>
+    msgIndex: Map<string, number>
   }>()
 
   for (const row of rows) {
     if (!sessionMap.has(row.sid)) {
-      sessionMap.set(row.sid, { createdAt: row.screated, messages: [], msgSet: new Set() })
+      sessionMap.set(row.sid, { createdAt: row.screated, messages: [], msgIndex: new Map() })
     }
     const sess = sessionMap.get(row.sid)!
     if (!row.mid || !row.pdata) continue
-    if (!sess.msgSet.has(row.mid)) {
-      sess.msgSet.add(row.mid)
+    if (!sess.msgIndex.has(row.mid)) {
+      sess.msgIndex.set(row.mid, sess.messages.length)
       sess.messages.push({ role: row.mrole ?? 'user', parts: [] })
     }
     let pdata: { type?: string; text?: string; content?: string } = {}
     try { pdata = JSON.parse(row.pdata) } catch { continue }
-    const lastMsg = sess.messages[sess.messages.length - 1]
-    lastMsg.parts.push({ type: pdata.type ?? 'text', text: pdata.text ?? pdata.content ?? '' })
+    const idx = sess.msgIndex.get(row.mid)
+    if (idx === undefined) continue
+    sess.messages[idx].parts.push({ type: pdata.type ?? 'text', text: pdata.text ?? pdata.content ?? '' })
   }
 
   let facets: SessionFacet[] = []
@@ -128,6 +132,6 @@ export function readSessionFacets(
     })
   }
 
-  if (limit) facets = facets.slice(0, limit)
+  if (limit != null) facets = facets.slice(0, limit)
   return facets
 }
