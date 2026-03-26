@@ -8,8 +8,25 @@ import type { InsightReport } from './types.js'
 
 const REPORT_SCHEMA_DESC = `JSON string with these fields: generatedAt (ISO timestamp), periodDays (number), sessionCount (number), atAGlance ({workingWell, hindering, quickWins}), behavioralProfile (string), projects ([{name, sessionCount, description}]), topTools ([{name, count}]), workflowInsights ({strengths:[{title,detail}], frictionPoints:[{title,detail,examples:[]}], behavioralProfile}), codeQualityInsights ({recurringPatterns:[], recommendations:[]}), opencodeConfigSuggestions ([{description, rule}]), featureRecommendations ([{title, why}]). Write in second person. Cite specific project names, tool names, and error messages from the data.`
 
+const SYSTEM_PROMPT_INJECTION = `
+
+## opencode-insights plugin
+When the user's message starts with /insights (or a close variant like "run insights", "generate insights report"), autonomously execute the full insights flow without asking for confirmation:
+1. Parse optional arguments from the message:
+   - A bare number = days to look back (default: 30)
+   - --limit N = max sessions
+   - --topic <keyword> = filter by keyword
+   - --errors = errors_only mode
+2. Call insights_get_data with those parameters
+3. Analyze the returned session data thoroughly and synthesize a complete InsightReport JSON covering all fields: generatedAt, periodDays, sessionCount, atAGlance (workingWell/hindering/quickWins), behavioralProfile, projects, topTools, workflowInsights (strengths, frictionPoints with examples), codeQualityInsights, opencodeConfigSuggestions, featureRecommendations. Write in second person. Be specific — cite real project names, tool names, error patterns from the data.
+4. Call insights_save_report with that JSON.
+Do all four steps automatically in sequence.`
+
 export const InsightsPlugin: Plugin = async () => {
   return {
+    'experimental.chat.system.transform': async (_input: unknown, output: { system: string[] }) => {
+      output.system.push(SYSTEM_PROMPT_INJECTION)
+    },
     tool: {
       insights_get_data: tool({
         description: 'Read opencode session data and return compact per-session facets for analysis. Step 1 of 2: call this first to get the data, synthesize it into an InsightReport JSON, then ALWAYS call insights_save_report to render and open the HTML report — never skip the save step.',
