@@ -3,7 +3,8 @@ import { Database } from 'bun:sqlite'
 import * as fs from 'node:fs'
 import * as os from 'node:os'
 import * as path from 'node:path'
-import type { SessionFacet } from './types.js'
+import type { ExtendedSessionFacet } from './types.js'
+import { computeWasteScore } from './compute.js'
 
 export function getDbPath(): string {
   const dataDir = process.env.OPENCODE_DATA_DIR
@@ -11,9 +12,9 @@ export function getDbPath(): string {
   return path.join(dataDir, 'opencode.db')
 }
 
-const KNOWN_TOOLS = ['bash', 'edit', 'read', 'write', 'grep', 'glob', 'webfetch', 'websearch', 'task']
 const ERROR_RE = /error|failed|exit code [^0]|enoent|cannot|not found/i
 const PATH_RE = /(?:^|\s)([\w.-]+)\/[\w./-]+\.(ts|js|py|lua|go|rs|json|md)/i
+const FILE_TOOLS = new Set(['edit', 'write', 'read'])
 
 function inferProject(texts: string[]): string {
   for (const text of texts) {
@@ -29,7 +30,7 @@ export function readSessionFacets(
   limit?: number,
   topic?: string,
   errorsOnly?: boolean
-): SessionFacet[] {
+): ExtendedSessionFacet[] {
   const dbPath = getDbPath()
   if (!fs.existsSync(dbPath)) {
     throw new Error(`opencode database not found at ${dbPath}`)
@@ -39,7 +40,7 @@ export function readSessionFacets(
   const cutoff = Date.now() - days * 24 * 60 * 60 * 1000
 
   type Row = {
-    sid: string; screated: number; mid: string | null;
+    sid: string; screated: number; mcreated: number | null; mid: string | null;
     mrole: string | null; pdata: string | null
   }
 
@@ -47,11 +48,12 @@ export function readSessionFacets(
   try {
     rows = db.query<Row, unknown[]>(`
       SELECT
-        s.id           AS sid,
-        s.time_created AS screated,
-        m.id           AS mid,
+        s.id             AS sid,
+        s.time_created   AS screated,
+        m.time_created   AS mcreated,
+        m.id             AS mid,
         JSON_EXTRACT(m.data, '$.role') AS mrole,
-        p.data         AS pdata
+        p.data           AS pdata
       FROM session s
       LEFT JOIN message m ON m.session_id = s.id
       LEFT JOIN part p ON p.message_id = m.id
@@ -63,33 +65,82 @@ export function readSessionFacets(
     db.close()
   }
 
-  // Group by session
-  const sessionMap = new Map<string, {
+  // Per-session accumulators
+  type SessAcc = {
     createdAt: number
+    msgTimes: number[]
     messages: Array<{ role: string; parts: Array<{ type: string; text: string; toolName?: string }> }>
     msgIndex: Map<string, number>
-  }>()
+    toolParts: Array<{ tool: string; hasError: boolean }>
+    filesTouched: Set<string>
+    turnDepth: number
+    userCount: number
+    assistantCount: number
+  }
+  const sessionMap = new Map<string, SessAcc>()
 
   for (const row of rows) {
     if (!sessionMap.has(row.sid)) {
-      sessionMap.set(row.sid, { createdAt: row.screated, messages: [], msgIndex: new Map() })
+      sessionMap.set(row.sid, {
+        createdAt: row.screated,
+        msgTimes: [],
+        messages: [],
+        msgIndex: new Map(),
+        toolParts: [],
+        filesTouched: new Set(),
+        turnDepth: 0,
+        userCount: 0,
+        assistantCount: 0,
+      })
     }
     const sess = sessionMap.get(row.sid)!
+    if (row.mcreated) sess.msgTimes.push(row.mcreated)
     if (!row.mid || !row.pdata) continue
     if (!sess.msgIndex.has(row.mid)) {
       sess.msgIndex.set(row.mid, sess.messages.length)
-      sess.messages.push({ role: row.mrole ?? 'user', parts: [] })
+      const role = row.mrole ?? 'user'
+      sess.messages.push({ role, parts: [] })
+      if (role === 'user') sess.userCount++
+      else if (role === 'assistant') sess.assistantCount++
     }
-    let pdata: { type?: string; text?: string; content?: string; tool?: string } = {}
+
+    let pdata: {
+      type?: string; text?: string; content?: string; tool?: string
+      state?: { input?: Record<string, string>; output?: string }
+    } = {}
     try { pdata = JSON.parse(row.pdata) } catch { continue }
+
     const idx = sess.msgIndex.get(row.mid)
     if (idx === undefined) continue
-    sess.messages[idx].parts.push({ type: pdata.type ?? 'text', text: pdata.text ?? pdata.content ?? '', toolName: pdata.tool })
+
+    // Count LLM generations
+    if (pdata.type === 'step-finish') {
+      sess.turnDepth++
+      continue
+    }
+
+    // Extract tool metrics
+    if (pdata.type === 'tool' && pdata.tool) {
+      const output = pdata.state?.output ?? ''
+      sess.toolParts.push({ tool: pdata.tool, hasError: ERROR_RE.test(output) })
+      if (FILE_TOOLS.has(pdata.tool.toLowerCase())) {
+        const fp = pdata.state?.input?.file_path ?? pdata.state?.input?.path
+        if (fp) sess.filesTouched.add(fp)
+      }
+    }
+
+    sess.messages[idx].parts.push({
+      type: pdata.type ?? 'text',
+      text: pdata.text ?? pdata.content ?? '',
+      toolName: pdata.tool,
+    })
   }
 
-  let facets: SessionFacet[] = []
+  let facets: ExtendedSessionFacet[] = []
 
   for (const [sid, sess] of sessionMap) {
+    if (sess.messages.length === 0) continue
+
     const allTexts = sess.messages.flatMap(m => m.parts.map(p => p.text))
     const assistantTexts = sess.messages
       .filter(m => m.role === 'assistant')
@@ -113,13 +164,16 @@ export function readSessionFacets(
     const rawFirstMsg = sess.messages
       .find(m => m.role === 'user')
       ?.parts.map(p => p.text).join(' ') ?? ''
-    const firstUserMsg = rawFirstMsg.replace(/^"([\s\S]*?)"\s*$/, '$1').slice(0, 200)
+    const firstUserMessage = rawFirstMsg.replace(/^"([\s\S]*?)"\s*$/, '$1').slice(0, 200)
 
     const fullText = allTexts.join(' ')
-
-    if (sess.messages.length === 0) continue
     if (topic && !fullText.toLowerCase().includes(topic.toLowerCase())) continue
-    if (errorsOnly && errorSnippets.length === 0) continue
+    if (errorsOnly && sess.toolParts.every(p => !p.hasError)) continue
+
+    const sortedTimes = sess.msgTimes.filter(Boolean).sort((a, b) => a - b)
+    const duration = sortedTimes.length >= 2
+      ? sortedTimes[sortedTimes.length - 1] - sortedTimes[0]
+      : 0
 
     facets.push({
       sessionId: sid,
@@ -128,7 +182,12 @@ export function readSessionFacets(
       messageCount: sess.messages.length,
       toolsUsed,
       errorSnippets,
-      firstUserMessage: firstUserMsg,
+      firstUserMessage,
+      duration,
+      wasteScore: computeWasteScore(sess.toolParts),
+      messageCounts: { user: sess.userCount, assistant: sess.assistantCount },
+      filesTouched: Array.from(sess.filesTouched),
+      turnDepth: sess.turnDepth,
     })
   }
 
