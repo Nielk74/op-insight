@@ -12961,7 +12961,7 @@ var SPA_SCRIPT = `
           '</ul></div>' : '';
       var mc = s.messageCounts || { user: 0, assistant: 0 };
       card.innerHTML =
-        '<div class="card-header" onclick="this.parentElement.classList.toggle('open')">' +
+        '<div class="card-header">' +
           '<div class="card-meta"><span class="card-date">' + esc(s.date) + '</span>' +
           '<span class="card-project">' + esc(s.projectName) + '</span>' + wasteBadge + '</div>' +
           '<div class="card-msg">' + esc(s.firstUserMessage.slice(0, 120)) + '</div>' +
@@ -12973,6 +12973,9 @@ var SPA_SCRIPT = `
           '<div class="detail-row"><strong>Messages:</strong> ' + mc.user + ' user &nbsp;&middot;&nbsp; ' + mc.assistant + ' assistant</div>' +
           fileList + errList +
         '</div>';
+      card.querySelector('.card-header').addEventListener('click', function() {
+        card.classList.toggle('open');
+      });
       container.appendChild(card);
     });
   }
