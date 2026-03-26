@@ -44,9 +44,10 @@ export function renderReport(data: InsightsData): string {
     .tl-row { display: flex; align-items: center; gap: .75rem; margin-bottom: .5rem; }
     .tl-label { font-size: .8rem; color: #8b949e; width: 140px; flex-shrink: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .tl-track { flex: 1; position: relative; height: 24px; }
-    .fp-desc { font-size: .85rem; color: #8b949e; margin-top: .5rem; line-height: 1.6; }
-    .fp-desc li { margin-bottom: .25rem; list-style: none; }
-    canvas { display: block; }
+    .fp-layout { display: flex; align-items: flex-start; gap: 2rem; flex-wrap: wrap; }
+    .fp-desc { font-size: .85rem; color: #8b949e; line-height: 1.8; flex: 1; min-width: 240px; align-self: center; }
+    .fp-desc li { margin-bottom: .4rem; list-style: none; padding-left: .75rem; border-left: 2px solid #30363d; }
+    canvas { display: block; flex-shrink: 0; }
     .tl-dot { position: absolute; border-radius: 50%; cursor: pointer; transform: translate(-50%, -50%); top: 50%; }
     .sess-card { background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: .75rem 1rem; margin-bottom: .5rem; cursor: pointer; }
     .sess-card.open .card-body { display: block; }
@@ -68,7 +69,7 @@ export function renderReport(data: InsightsData): string {
     <button onclick="showTab('cards')" id="tab-cards">Sessions</button>
   </nav>
   <div id="panel-trends" class="panel"><div id="trends-grid" class="grid2"></div></div>
-  <div id="panel-fingerprint" class="panel"><canvas id="radar-canvas" width="400" height="340"></canvas><ul id="fp-descriptions" class="fp-desc"></ul></div>
+  <div id="panel-fingerprint" class="panel"><div class="fp-layout"><canvas id="radar-canvas" width="400" height="340"></canvas><ul id="fp-descriptions" class="fp-desc"></ul></div></div>
   <div id="panel-timeline" class="panel"><div id="timeline-rows"></div></div>
   <div id="panel-cards" class="panel"><div id="cards-list"></div></div>
   <script>window.INSIGHTS_DATA = ${dataJson};</script>
