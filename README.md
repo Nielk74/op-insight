@@ -1,54 +1,69 @@
 # opencode-insights
 
-A tool for extracting insights from opencode sessions.
+A native [opencode](https://opencode.ai) plugin that generates a rich insights report from your session history.
 
 ## Installation
 
-```bash
-npm install -g opencode-insights
+Add to your `opencode.json`:
+
+```json
+{
+  "plugin": ["opencode-insights"]
+}
 ```
+
+opencode will auto-install the plugin on next startup.
 
 ## Usage
 
-```bash
-# Generate insights report for the last 30 days
-opencode-insights
+Simply ask opencode to generate a report:
 
-# Generate insights report for the last 7 days
-opencode-insights --days 7
+```
+/insights
+/insights 7
+/insights 7 --errors
+/insights 14 --topic typescript
+/insights 30 --limit 20
 ```
 
-## Features
+Or just type: *"generate my insights report for the last 7 days"*
 
-- Analyzes opencode sessions for workflow insights
-- Extracts code quality patterns
-- Identifies friction points in development workflow
-- Provides actionable recommendations
-- Shows project and team productivity trends
+The plugin exposes two tools that the LLM uses automatically:
+- **`insights_get_data`** — reads your session history from opencode's SQLite DB, extracts facets heuristically (no extra LLM calls)
+- **`insights_save_report`** — renders the HTML report and opens it in your browser
 
-## Structure
+## Options
 
-The tool is organized into the following modules:
-- `reader.ts`: Reads sessions from opencode database
-- `extractor.ts`: Extracts insights from individual sessions
-- `aggregator.ts`: Combines insights into comprehensive reports
-- `reporter.ts`: Formats and outputs the final report
-- `llm.ts`: Interacts with language models for deeper analysis
-- `config.ts`: Reads opencode configuration
-- `database.ts`: Manages local insights database
+| Argument | Description |
+|----------|-------------|
+| `days` | Number of past days to include (default: 30) |
+| `--limit N` | Cap at N most recent sessions (faster) |
+| `--topic <keyword>` | Only sessions whose content matches the keyword |
+| `--errors` | Only sessions that had tool errors |
+
+## Report Contents
+
+- At-a-glance summary (what's working, what's hindering you, quick wins)
+- Project breakdown with descriptions
+- Top tools bar chart
+- Workflow strengths and friction points with concrete examples
+- Code quality patterns and recommendations
+- opencode config suggestions (copy-pasteable JSON)
+- Feature recommendations
 
 ## Development
 
 ```bash
-# Install dependencies
+git clone https://github.com/Nielk74/op-insight
+cd op-insight
 npm install
-
-# Run in development mode
-npm run dev
-
-# Build for production
 npm run build
+```
 
-# Run tests
-npm test
+To use a local version in opencode, add the absolute path to your `opencode.json`:
+
+```json
+{
+  "plugin": ["/absolute/path/to/op-insight"]
+}
 ```
