@@ -8,19 +8,20 @@
     ".": "./dist/index.js"
   },
   "scripts": {
-    "build": "bun build src/index.ts --outdir dist --target bun --format esm",
+    "build": "esbuild src/index.ts --bundle --platform=node --target=esnext --format=esm --external:bun:sqlite --external:bun --outfile=dist/index.js",
     "typecheck": "tsc --noEmit",
     "test": "echo 'no tests yet'",
-    "prepublishOnly": "bun run build"
+    "prepublishOnly": "npm run build"
   },
   "dependencies": {
-    "@opencode-ai/plugin": "^1.0.162"
+    "@opencode-ai/plugin": "^1.3.2"
   },
   "peerDependencies": {
     "@opencode-ai/plugin": ">=1.0.0"
   },
   "devDependencies": {
     "bun-types": "latest",
+    "esbuild": "^0.25.0",
     "typescript": "^5.7.0"
   },
   "keywords": ["opencode", "plugin", "insights", "analytics"],
