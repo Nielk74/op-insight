@@ -1,18 +1,22 @@
 # opencode-insights
 
-A native [opencode](https://opencode.ai) plugin that generates a rich insights report from your session history.
+A native [opencode](https://opencode.ai) plugin that generates a rich, interactive HTML report from your session history — no extra LLM calls, all analysis runs locally.
 
 ## Installation
 
-### Option 1: From npm (recommended)
+> **Config file location**
+> - Windows: `C:\Users\<you>\.config\opencode\config.json`
+> - macOS/Linux: `~/.config/opencode/config.json`
+>
+> Create it if it doesn't exist yet.
 
-1. Install the package globally:
+### Option 1: From npm (recommended)
 
 ```bash
 npm install -g opencode-insights
 ```
 
-2. Add it to your opencode config at `~/.config/opencode/config.json`:
+Add to your opencode config:
 
 ```json
 {
@@ -20,11 +24,7 @@ npm install -g opencode-insights
 }
 ```
 
-opencode will load the plugin automatically on next startup.
-
-### Option 2: From source (local path)
-
-1. Clone and build:
+### Option 2: From source
 
 ```bash
 git clone https://github.com/Nielk74/op-insight
@@ -33,7 +33,7 @@ npm install
 npm run build
 ```
 
-2. Add the absolute path to your opencode config at `~/.config/opencode/config.json`:
+Add the absolute path to your opencode config:
 
 ```json
 {
@@ -41,25 +41,11 @@ npm run build
 }
 ```
 
-> **Where is the config file?**
-> - Windows: `C:\Users\<you>\.config\opencode\config.json`
-> - macOS/Linux: `~/.config/opencode/config.json`
->
-> Create it if it doesn't exist yet.
-
-## Testing the plugin
-
-To quickly verify the plugin works end-to-end from the command line:
-
-```bash
-opencode run --dir . "Use the insights_get_data tool with days=30 and limit=5. Call the tool and show me the raw result."
-```
-
-This runs a headless session, invokes `insights_get_data`, and prints the tool output without opening the TUI.
+opencode loads the plugin automatically on next startup.
 
 ## Usage
 
-Simply ask opencode to generate a report:
+Type `/insights` in any opencode session. The LLM will automatically run the full flow — no extra prompting needed.
 
 ```
 /insights
@@ -69,13 +55,9 @@ Simply ask opencode to generate a report:
 /insights 30 --limit 20
 ```
 
-Or just type: *"generate my insights report for the last 7 days"*
+You can also just say: *"generate my insights report for the last 30 days"*
 
-The plugin exposes two tools that the LLM uses automatically:
-- **`insights_get_data`** — reads your session history from opencode's SQLite DB, extracts facets heuristically (no extra LLM calls)
-- **`insights_save_report`** — renders the HTML report and opens it in your browser
-
-## Options
+### Arguments
 
 | Argument | Description |
 |----------|-------------|
@@ -84,13 +66,28 @@ The plugin exposes two tools that the LLM uses automatically:
 | `--topic <keyword>` | Only sessions whose content matches the keyword |
 | `--errors` | Only sessions that had tool errors |
 
-## Report Contents
+## Report Tabs
 
-- At-a-glance summary (what's working, what's hindering you, quick wins)
-- Project breakdown with descriptions
-- Top tools bar chart
-- Workflow strengths and friction points with concrete examples
-- Code quality patterns and recommendations
-- opencode config suggestions (copy-pasteable JSON)
-- Feature recommendations
+The generated HTML report opens in your browser with five tabs:
 
+- **Summary** — at-a-glance cards (what's working, what's hindering, quick wins), behavioral profile, project breakdown, workflow strengths and friction points with examples, config suggestions, feature recommendations
+- **Trends** — weekly sparklines for sessions, tokens, waste score, tool errors, and a time-of-day usage chart
+- **Fingerprint** — radar chart of your coding style axes (exploration, interruptions, waste, deep work, tool diversity)
+- **Timeline** — dot-plot of sessions per project over the selected time window
+- **Sessions** — expandable cards for each session with tool usage, file counts, and turn depth
+
+## History Management
+
+The plugin keeps a `history.json` of past runs to power the Trends and Fingerprint tabs. Two tools let you manage it:
+
+- **`insights_list_runs`** — list all stored runs with timestamps and session counts
+- **`insights_delete_run`** — remove a specific run by its `runAt` timestamp
+
+Example: *"list my insights runs"* or *"delete the insights run from 2026-03-20"*
+
+## How It Works
+
+The plugin exposes tools the LLM calls automatically:
+
+1. **`insights_get_data`** — reads opencode's SQLite session DB, extracts per-session facets (duration, tools used, files touched, waste score, turn depth, hour of day) — no LLM calls
+2. **`insights_save_report`** — takes the synthesized `InsightReport` JSON, renders the HTML report, saves it to `~/.local/share/opencode/insights/`, and opens it in your browser
