@@ -57,7 +57,12 @@ export const InsightsPlugin: Plugin = async () => {
           } catch (e) {
             return `Error: report_json is not valid JSON: ${e}`
           }
-          const outPath = saveAndOpenReport(report)
+          let outPath: string
+          try {
+            outPath = saveAndOpenReport(report)
+          } catch (e) {
+            return `Error saving report: ${e instanceof Error ? e.stack ?? e.message : String(e)}`
+          }
           return `Report saved to ${outPath} and opened in browser.`
         },
       }),
