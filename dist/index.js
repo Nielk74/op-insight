@@ -13297,6 +13297,68 @@ function saveAndOpenReport(report) {
   return outPath;
 }
 
+// src/synthesize.ts
+function extractText(parts) {
+  return parts.filter((p) => p.type === "text" && p.text).map((p) => p.text).join("\n").trim();
+}
+function parseJSON(text, fallback) {
+  const cleaned = text.replace(/^```(?:json)?\n?/m, "").replace(/\n?```$/m, "").trim();
+  try {
+    return JSON.parse(cleaned);
+  } catch {
+    return fallback;
+  }
+}
+async function llmCall(client, sessionId, prompt) {
+  const res = await client.session.prompt({
+    path: { id: sessionId },
+    body: { parts: [{ type: "text", text: prompt }] }
+  });
+  if (!res.data) throw new Error("No response from LLM");
+  return extractText(res.data.parts);
+}
+async function synthesizeAtAGlance(client, facets, days, directory) {
+  const fallback = { workingWell: "", hindering: "", quickWins: "" };
+  if (facets.length === 0) return fallback;
+  const sessRes = await client.session.create({ query: { directory } });
+  if (!sessRes.data) return fallback;
+  const sessionId = sessRes.data.id;
+  try {
+    const sessionLines = facets.slice(0, 60).map(
+      (f, i) => `[${i + 1}] ${f.date} | turns:${f.turnDepth} | waste:${f.wasteScore}/10 | tools:${f.toolsUsed.slice(0, 5).join(",")} | files:${f.filesTouched.length} | errors:${f.errorSnippets.length} | "${f.firstUserMessage.slice(0, 120)}"`
+    ).join("\n");
+    const summarizerPrompt = `You are analyzing opencode AI coding sessions. For each session below, write ONE sentence describing what the user was trying to accomplish and whether it succeeded or hit friction. Be concrete \u2014 mention the tools used and what went wrong if anything.
+
+Sessions:
+${sessionLines}
+
+Respond with a JSON array of strings (one per session, same order). No other text.`;
+    const summariesText = await llmCall(client, sessionId, summarizerPrompt);
+    const summaries = parseJSON(summariesText, []);
+    const summaryLines = (summaries.length > 0 ? summaries : facets.map((f) => f.firstUserMessage.slice(0, 80))).map((s, i) => `[${i + 1}] ${s}`).join("\n");
+    const aggregatorPrompt = `You are a coding workflow analyst. Based on ${facets.length} opencode sessions over the last ${days} days:
+
+${summaryLines}
+
+Produce a JSON object with exactly these three fields:
+- "workingWell": 2-3 sentences on patterns that are working well for this user.
+- "hindering": 2-3 sentences on what is blocking or slowing them down.
+- "quickWins": 2-3 sentences of specific, actionable improvements. Always mention: (1) adding project-specific instructions to opencode.json using the "instructions" field (e.g. \`{"instructions": ["CONTRIBUTING.md", "docs/guidelines.md", ".cursor/rules/*.md"]}\`) so the AI has context about the project, and (2) keeping an AGENTS.md or CLAUDE.md at the repo root with coding guidelines.
+
+Respond with ONLY the JSON object. No markdown, no explanation.`;
+    const glanceText = await llmCall(client, sessionId, aggregatorPrompt);
+    const glance = parseJSON(glanceText, {});
+    return {
+      workingWell: glance.workingWell ?? "",
+      hindering: glance.hindering ?? "",
+      quickWins: glance.quickWins ?? ""
+    };
+  } finally {
+    await client.session.delete({ path: { id: sessionId } }).catch(() => {
+    });
+  }
+}
+
 // src/plugin.ts
 var REPORT_SCHEMA_DESC = `JSON string with these fields: generatedAt (ISO timestamp), periodDays (number), sessionCount (MUST match the exact count returned by insights_get_data \u2014 do not invent a different number), atAGlance ({workingWell, hindering, quickWins}), behavioralProfile (string), projects ([{name, sessionCount, description}]), topTools ([{name, count}] \u2014 use ONLY tools that actually appear in the session data), workflowInsights ({strengths:[{title,detail}], frictionPoints:[{title,detail,examples:[]}], behavioralProfile}), codeQualityInsights ({recurringPatterns:[], recommendations:[]}), opencodeConfigSuggestions ([{description, rule}] \u2014 always include a suggestion about the "instructions" field in opencode.json for loading project guidelines like CONTRIBUTING.md or .cursor/rules/*.md), featureRecommendations ([{title, why}]). Write in second person. Cite only real tool names and error patterns from the data.`;
 var SYSTEM_PROMPT_INJECTION = `
@@ -13310,15 +13372,16 @@ When the user's message starts with /insights (or a close variant like "run insi
    - --errors = errors_only mode
 2. Call insights_get_data with those parameters.
 3. Synthesize the returned data into a complete InsightReport JSON. CRITICAL rules:
+   - The response from insights_get_data already includes a pre-computed "atAGlance" field \u2014 copy it EXACTLY into the report as-is. Do NOT rewrite or replace it.
    - Use the EXACT sessionCount from the data (the "sessionCount" field in the response). Never invent a different number.
    - Use ONLY tool names, error snippets, file paths, and dates that actually appear in the session data. Do not invent project names, session counts, or tool usage counts.
    - generatedAt must be today's ISO timestamp.
-   - All fields are required: generatedAt, periodDays, sessionCount, atAGlance (workingWell/hindering/quickWins), behavioralProfile, projects, topTools, workflowInsights (strengths, frictionPoints with examples), codeQualityInsights, opencodeConfigSuggestions, featureRecommendations.
+   - All fields are required: generatedAt, periodDays, sessionCount, atAGlance, behavioralProfile, projects, topTools, workflowInsights (strengths, frictionPoints with examples), codeQualityInsights, opencodeConfigSuggestions, featureRecommendations.
    - Write in second person. Be specific \u2014 cite real tool names and error patterns from the data.
-   - For opencodeConfigSuggestions, always include a suggestion about using the "instructions" field in opencode.json to load project-specific guidelines (e.g. CONTRIBUTING.md, docs/guidelines.md, .cursor/rules/*.md).
 4. Call insights_save_report with that JSON.
 Do all four steps automatically in sequence.`;
-var InsightsPlugin = async () => {
+var InsightsPlugin = async (input) => {
+  const { client, directory } = input;
   return {
     "experimental.chat.system.transform": async (_input, output) => {
       output.system.push(SYSTEM_PROMPT_INJECTION);
@@ -13349,9 +13412,15 @@ var InsightsPlugin = async () => {
             savePending(getInsightsDir(), facets, args.days);
           } catch (_) {
           }
+          let atAGlance;
+          try {
+            atAGlance = await synthesizeAtAGlance(client, facets, args.days, directory);
+          } catch (_) {
+          }
           return JSON.stringify({
             periodDays: args.days,
             sessionCount: facets.length,
+            atAGlance,
             sessions: facets
           }, null, 2);
         }

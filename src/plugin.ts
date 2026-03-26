@@ -4,6 +4,7 @@ import { tool } from '@opencode-ai/plugin'
 import { readSessionFacets } from './reader.js'
 import { saveAndOpenReport, getInsightsDir } from './reporter.js'
 import { savePending, readHistory, deleteFromHistory } from './history.js'
+import { synthesizeAtAGlance } from './synthesize.js'
 import type { InsightReport } from './types.js'
 
 const REPORT_SCHEMA_DESC = `JSON string with these fields: generatedAt (ISO timestamp), periodDays (number), sessionCount (MUST match the exact count returned by insights_get_data — do not invent a different number), atAGlance ({workingWell, hindering, quickWins}), behavioralProfile (string), projects ([{name, sessionCount, description}]), topTools ([{name, count}] — use ONLY tools that actually appear in the session data), workflowInsights ({strengths:[{title,detail}], frictionPoints:[{title,detail,examples:[]}], behavioralProfile}), codeQualityInsights ({recurringPatterns:[], recommendations:[]}), opencodeConfigSuggestions ([{description, rule}] — always include a suggestion about the "instructions" field in opencode.json for loading project guidelines like CONTRIBUTING.md or .cursor/rules/*.md), featureRecommendations ([{title, why}]). Write in second person. Cite only real tool names and error patterns from the data.`
@@ -19,16 +20,17 @@ When the user's message starts with /insights (or a close variant like "run insi
    - --errors = errors_only mode
 2. Call insights_get_data with those parameters.
 3. Synthesize the returned data into a complete InsightReport JSON. CRITICAL rules:
+   - The response from insights_get_data already includes a pre-computed "atAGlance" field — copy it EXACTLY into the report as-is. Do NOT rewrite or replace it.
    - Use the EXACT sessionCount from the data (the "sessionCount" field in the response). Never invent a different number.
    - Use ONLY tool names, error snippets, file paths, and dates that actually appear in the session data. Do not invent project names, session counts, or tool usage counts.
    - generatedAt must be today's ISO timestamp.
-   - All fields are required: generatedAt, periodDays, sessionCount, atAGlance (workingWell/hindering/quickWins), behavioralProfile, projects, topTools, workflowInsights (strengths, frictionPoints with examples), codeQualityInsights, opencodeConfigSuggestions, featureRecommendations.
+   - All fields are required: generatedAt, periodDays, sessionCount, atAGlance, behavioralProfile, projects, topTools, workflowInsights (strengths, frictionPoints with examples), codeQualityInsights, opencodeConfigSuggestions, featureRecommendations.
    - Write in second person. Be specific — cite real tool names and error patterns from the data.
-   - For opencodeConfigSuggestions, always include a suggestion about using the "instructions" field in opencode.json to load project-specific guidelines (e.g. CONTRIBUTING.md, docs/guidelines.md, .cursor/rules/*.md).
 4. Call insights_save_report with that JSON.
 Do all four steps automatically in sequence.`
 
-export const InsightsPlugin: Plugin = async () => {
+export const InsightsPlugin: Plugin = async (input) => {
+  const { client, directory } = input
   return {
     'experimental.chat.system.transform': async (_input: unknown, output: { system: string[] }) => {
       output.system.push(SYSTEM_PROMPT_INJECTION)
@@ -60,9 +62,19 @@ export const InsightsPlugin: Plugin = async () => {
           } catch (_) {
             // non-fatal
           }
+
+          // Run two-agent synthesis: per-session summaries → at-a-glance
+          let atAGlance: { workingWell: string; hindering: string; quickWins: string } | undefined
+          try {
+            atAGlance = await synthesizeAtAGlance(client, facets, args.days, directory)
+          } catch (_) {
+            // non-fatal — SPA fallback will compute from raw data
+          }
+
           return JSON.stringify({
             periodDays: args.days,
             sessionCount: facets.length,
+            atAGlance,
             sessions: facets,
           }, null, 2)
         },
