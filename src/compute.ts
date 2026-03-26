@@ -37,21 +37,20 @@ export function computeFingerprint(history: HistoryEntry[]): FingerprintAxes {
 
   const sessions = deduplicateSessions(history).filter(s => s.date >= cutoffStr)
   if (sessions.length === 0) {
-    return { autonomy: 0, breadth: 0, iteration: 0, toolDiversity: 0, outputDensity: 0 }
+    return { autonomy: 0, sessionFrequency: 0, iteration: 0, toolDiversity: 0, outputDensity: 0 }
   }
 
   const autonomy = Math.min(
     sessions.reduce((s, f) => s + f.turnDepth, 0) / sessions.length / 10, 1
   )
 
-  const weekProjects = new Map<string, Set<string>>()
+  const weekCounts = new Map<string, number>()
   for (const s of sessions) {
     const w = weekStart(s.date)
-    if (!weekProjects.has(w)) weekProjects.set(w, new Set())
-    weekProjects.get(w)!.add(s.projectName)
+    weekCounts.set(w, (weekCounts.get(w) ?? 0) + 1)
   }
-  const avgProjectsPerWeek = [...weekProjects.values()].reduce((s, p) => s + p.size, 0) / weekProjects.size
-  const breadth = Math.min(avgProjectsPerWeek / 5, 1)
+  const avgSessionsPerWeek = [...weekCounts.values()].reduce((s, n) => s + n, 0) / weekCounts.size
+  const sessionFrequency = Math.min(avgSessionsPerWeek / 10, 1)
 
   const avgWaste = sessions.reduce((s, f) => s + f.wasteScore, 0) / sessions.length
   const iteration = Math.max(0, 1 - avgWaste / 10)
@@ -63,7 +62,7 @@ export function computeFingerprint(history: HistoryEntry[]): FingerprintAxes {
   const avgFiles = sessions.reduce((s, f) => s + f.filesTouched.length, 0) / sessions.length
   const outputDensity = Math.min(avgFiles / 10, 1)
 
-  return { autonomy, breadth, iteration, toolDiversity, outputDensity }
+  return { autonomy, sessionFrequency, iteration, toolDiversity, outputDensity }
 }
 
 /** Compute weekly trend data for the last 12 weeks. */

@@ -272,19 +272,18 @@ export const SPA_SCRIPT = `
   // ── Fingerprint Panel ───────────────────────────────────────────
   function renderFingerprint() {
     var fp = data.fingerprint;
-    var axes = ['Autonomy', 'Breadth', 'Iteration', 'Tool Diversity', 'Output Density'];
-    var scores = [fp.autonomy, fp.breadth, fp.iteration, fp.toolDiversity, fp.outputDensity];
+    var axes = ['Autonomy', 'Frequency', 'Iteration', 'Tool Diversity', 'Output Density'];
+    var scores = [fp.autonomy, fp.sessionFrequency, fp.iteration, fp.toolDiversity, fp.outputDensity];
     var canvas = document.getElementById('radar-canvas');
     drawRadar(canvas, scores, axes);
     var sessions = data.current.sessions;
     var avgTurnDepth = sessions.length ? (sessions.reduce(function(s,f){return s+f.turnDepth;},0)/sessions.length).toFixed(1) : '0';
-    var allProjects = new Set(sessions.map(function(s){return s.projectName;}));
     var avgWaste = sessions.length ? (sessions.reduce(function(s,f){return s+f.wasteScore;},0)/sessions.length).toFixed(1) : '0';
     var allTools = new Set(sessions.flatMap ? sessions.flatMap(function(s){return s.toolsUsed;}) : []);
     var avgFiles = sessions.length ? (sessions.reduce(function(s,f){return s+(f.filesTouched||[]).length;},0)/sessions.length).toFixed(1) : '0';
     var descs = [
       'Autonomy: avg ' + avgTurnDepth + ' turns per session (higher = you let it run longer)',
-      'Breadth: ' + allProjects.size + ' distinct projects this period',
+      'Frequency: avg sessions per week over the last 90 days',
       'Iteration: avg waste score ' + avgWaste + '/10 (lower is cleaner)',
       'Tool diversity: ' + allTools.size + ' unique tools used this period',
       'Output density: avg ' + avgFiles + ' files touched per session',
@@ -306,29 +305,40 @@ export const SPA_SCRIPT = `
 
   function renderTimeline() {
     var sessions = data.current.sessions;
-    var projectSet = {};
-    sessions.forEach(function(s) { projectSet[s.projectName] = true; });
-    var projects = Object.keys(projectSet);
     var dates = sessions.map(function(s){ return s.date; }).sort();
     var minMs = dates.length ? new Date(dates[0]).getTime() : Date.now();
     var maxMs = dates.length ? new Date(dates[dates.length-1]).getTime() : Date.now();
     var singleDay = minMs === maxMs;
     var span = singleDay ? 1 : (maxMs - minMs);
     var container = document.getElementById('timeline-rows');
-    projects.forEach(function(proj) {
+
+    // Group sessions by calendar week (Monday date)
+    var weekMap = {};
+    sessions.forEach(function(s) {
+      var d = new Date(s.date);
+      var day = d.getUTCDay();
+      var diff = (day === 0) ? -6 : 1 - day;
+      d.setUTCDate(d.getUTCDate() + diff);
+      var wk = d.toISOString().slice(0, 10);
+      if (!weekMap[wk]) weekMap[wk] = [];
+      weekMap[wk].push(s);
+    });
+    var weeks = Object.keys(weekMap).sort();
+
+    weeks.forEach(function(wk) {
       var row = document.createElement('div');
       row.className = 'tl-row';
       var label = document.createElement('div');
       label.className = 'tl-label';
-      label.textContent = proj;
+      label.textContent = wk;
       var track = document.createElement('div');
       track.className = 'tl-track';
-      var projSessions = sessions.filter(function(s){ return s.projectName === proj; });
-      projSessions.forEach(function(s, idx) {
+      var wkSessions = weekMap[wk];
+      wkSessions.forEach(function(s, idx) {
         var dot = document.createElement('div');
         dot.className = 'tl-dot';
         var pct = singleDay
-          ? (projSessions.length === 1 ? 50 : (idx / (projSessions.length - 1)) * 90 + 5)
+          ? (wkSessions.length === 1 ? 50 : (idx / (wkSessions.length - 1)) * 90 + 5)
           : ((new Date(s.date).getTime() - minMs) / span) * 94 + 3;
         var size = 10 + Math.min(s.turnDepth || 0, 6) * 2;
         dot.style.left = pct + '%';
@@ -390,8 +400,7 @@ export const SPA_SCRIPT = `
       var mc = s.messageCounts || { user: 0, assistant: 0 };
       card.innerHTML =
         '<div class="card-header">' +
-          '<div class="card-meta"><span class="card-date">' + esc(s.date) + '</span>' +
-          '<span class="card-project">' + esc(s.projectName) + '</span>' + wasteBadge + '</div>' +
+          '<div class="card-meta"><span class="card-date">' + esc(s.date) + '</span>' + wasteBadge + '</div>' +
           '<div class="card-msg">' + esc(s.firstUserMessage.slice(0, 120)) + '</div>' +
           '<div class="card-tools">' + toolPills + '</div>' +
         '</div>' +

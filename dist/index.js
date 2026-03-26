@@ -12455,20 +12455,19 @@ function computeFingerprint(history) {
   const cutoffStr = cutoff.toISOString().slice(0, 10);
   const sessions = deduplicateSessions(history).filter((s) => s.date >= cutoffStr);
   if (sessions.length === 0) {
-    return { autonomy: 0, breadth: 0, iteration: 0, toolDiversity: 0, outputDensity: 0 };
+    return { autonomy: 0, sessionFrequency: 0, iteration: 0, toolDiversity: 0, outputDensity: 0 };
   }
   const autonomy = Math.min(
     sessions.reduce((s, f) => s + f.turnDepth, 0) / sessions.length / 10,
     1
   );
-  const weekProjects = /* @__PURE__ */ new Map();
+  const weekCounts = /* @__PURE__ */ new Map();
   for (const s of sessions) {
     const w = weekStart(s.date);
-    if (!weekProjects.has(w)) weekProjects.set(w, /* @__PURE__ */ new Set());
-    weekProjects.get(w).add(s.projectName);
+    weekCounts.set(w, (weekCounts.get(w) ?? 0) + 1);
   }
-  const avgProjectsPerWeek = [...weekProjects.values()].reduce((s, p) => s + p.size, 0) / weekProjects.size;
-  const breadth = Math.min(avgProjectsPerWeek / 5, 1);
+  const avgSessionsPerWeek = [...weekCounts.values()].reduce((s, n) => s + n, 0) / weekCounts.size;
+  const sessionFrequency = Math.min(avgSessionsPerWeek / 10, 1);
   const avgWaste = sessions.reduce((s, f) => s + f.wasteScore, 0) / sessions.length;
   const iteration = Math.max(0, 1 - avgWaste / 10);
   const allToolsInWindow = new Set(sessions.flatMap((s) => s.toolsUsed));
@@ -12476,7 +12475,7 @@ function computeFingerprint(history) {
   const toolDiversity = allToolsEver.size === 0 ? 0 : allToolsInWindow.size / allToolsEver.size;
   const avgFiles = sessions.reduce((s, f) => s + f.filesTouched.length, 0) / sessions.length;
   const outputDensity = Math.min(avgFiles / 10, 1);
-  return { autonomy, breadth, iteration, toolDiversity, outputDensity };
+  return { autonomy, sessionFrequency, iteration, toolDiversity, outputDensity };
 }
 function computeTrends(history) {
   const unique = deduplicateSessions(history);
@@ -12515,15 +12514,7 @@ function getDbPath() {
   return path.join(dataDir, "opencode.db");
 }
 var ERROR_RE = /error|failed|exit code [^0]|enoent|cannot|not found/i;
-var PATH_RE = /(?:^|\s)([\w.-]+)\/[\w./-]+\.(ts|js|py|lua|go|rs|json|md)/i;
 var FILE_TOOLS = /* @__PURE__ */ new Set(["edit", "write", "read"]);
-function inferProject(texts) {
-  for (const text of texts) {
-    const m = text.match(PATH_RE);
-    if (m?.[1] && m[1] !== "node_modules") return m[1];
-  }
-  return "Unknown";
-}
 function readSessionFacets(days, currentSessionId, limit, topic, errorsOnly) {
   const dbPath = getDbPath();
   if (!fs.existsSync(dbPath)) {
@@ -12628,7 +12619,6 @@ function readSessionFacets(days, currentSessionId, limit, topic, errorsOnly) {
     const hourOfDay = new Date(sortedTimes[0] ?? sess.createdAt).getHours();
     facets.push({
       sessionId: sid,
-      projectName: inferProject(allTexts),
       date: new Date(sess.createdAt).toISOString().slice(0, 10),
       messageCount: sess.messages.length,
       toolsUsed,
@@ -12973,19 +12963,18 @@ var SPA_SCRIPT = `
   // \u2500\u2500 Fingerprint Panel \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
   function renderFingerprint() {
     var fp = data.fingerprint;
-    var axes = ['Autonomy', 'Breadth', 'Iteration', 'Tool Diversity', 'Output Density'];
-    var scores = [fp.autonomy, fp.breadth, fp.iteration, fp.toolDiversity, fp.outputDensity];
+    var axes = ['Autonomy', 'Frequency', 'Iteration', 'Tool Diversity', 'Output Density'];
+    var scores = [fp.autonomy, fp.sessionFrequency, fp.iteration, fp.toolDiversity, fp.outputDensity];
     var canvas = document.getElementById('radar-canvas');
     drawRadar(canvas, scores, axes);
     var sessions = data.current.sessions;
     var avgTurnDepth = sessions.length ? (sessions.reduce(function(s,f){return s+f.turnDepth;},0)/sessions.length).toFixed(1) : '0';
-    var allProjects = new Set(sessions.map(function(s){return s.projectName;}));
     var avgWaste = sessions.length ? (sessions.reduce(function(s,f){return s+f.wasteScore;},0)/sessions.length).toFixed(1) : '0';
     var allTools = new Set(sessions.flatMap ? sessions.flatMap(function(s){return s.toolsUsed;}) : []);
     var avgFiles = sessions.length ? (sessions.reduce(function(s,f){return s+(f.filesTouched||[]).length;},0)/sessions.length).toFixed(1) : '0';
     var descs = [
       'Autonomy: avg ' + avgTurnDepth + ' turns per session (higher = you let it run longer)',
-      'Breadth: ' + allProjects.size + ' distinct projects this period',
+      'Frequency: avg sessions per week over the last 90 days',
       'Iteration: avg waste score ' + avgWaste + '/10 (lower is cleaner)',
       'Tool diversity: ' + allTools.size + ' unique tools used this period',
       'Output density: avg ' + avgFiles + ' files touched per session',
@@ -13007,29 +12996,40 @@ var SPA_SCRIPT = `
 
   function renderTimeline() {
     var sessions = data.current.sessions;
-    var projectSet = {};
-    sessions.forEach(function(s) { projectSet[s.projectName] = true; });
-    var projects = Object.keys(projectSet);
     var dates = sessions.map(function(s){ return s.date; }).sort();
     var minMs = dates.length ? new Date(dates[0]).getTime() : Date.now();
     var maxMs = dates.length ? new Date(dates[dates.length-1]).getTime() : Date.now();
     var singleDay = minMs === maxMs;
     var span = singleDay ? 1 : (maxMs - minMs);
     var container = document.getElementById('timeline-rows');
-    projects.forEach(function(proj) {
+
+    // Group sessions by calendar week (Monday date)
+    var weekMap = {};
+    sessions.forEach(function(s) {
+      var d = new Date(s.date);
+      var day = d.getUTCDay();
+      var diff = (day === 0) ? -6 : 1 - day;
+      d.setUTCDate(d.getUTCDate() + diff);
+      var wk = d.toISOString().slice(0, 10);
+      if (!weekMap[wk]) weekMap[wk] = [];
+      weekMap[wk].push(s);
+    });
+    var weeks = Object.keys(weekMap).sort();
+
+    weeks.forEach(function(wk) {
       var row = document.createElement('div');
       row.className = 'tl-row';
       var label = document.createElement('div');
       label.className = 'tl-label';
-      label.textContent = proj;
+      label.textContent = wk;
       var track = document.createElement('div');
       track.className = 'tl-track';
-      var projSessions = sessions.filter(function(s){ return s.projectName === proj; });
-      projSessions.forEach(function(s, idx) {
+      var wkSessions = weekMap[wk];
+      wkSessions.forEach(function(s, idx) {
         var dot = document.createElement('div');
         dot.className = 'tl-dot';
         var pct = singleDay
-          ? (projSessions.length === 1 ? 50 : (idx / (projSessions.length - 1)) * 90 + 5)
+          ? (wkSessions.length === 1 ? 50 : (idx / (wkSessions.length - 1)) * 90 + 5)
           : ((new Date(s.date).getTime() - minMs) / span) * 94 + 3;
         var size = 10 + Math.min(s.turnDepth || 0, 6) * 2;
         dot.style.left = pct + '%';
@@ -13091,8 +13091,7 @@ var SPA_SCRIPT = `
       var mc = s.messageCounts || { user: 0, assistant: 0 };
       card.innerHTML =
         '<div class="card-header">' +
-          '<div class="card-meta"><span class="card-date">' + esc(s.date) + '</span>' +
-          '<span class="card-project">' + esc(s.projectName) + '</span>' + wasteBadge + '</div>' +
+          '<div class="card-meta"><span class="card-date">' + esc(s.date) + '</span>' + wasteBadge + '</div>' +
           '<div class="card-msg">' + esc(s.firstUserMessage.slice(0, 120)) + '</div>' +
           '<div class="card-tools">' + toolPills + '</div>' +
         '</div>' +

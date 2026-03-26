@@ -2,7 +2,6 @@
 
 export type SessionFacet = {
   sessionId: string
-  projectName: string        // inferred from file paths or directory
   date: string               // ISO date string of session creation
   messageCount: number
   toolsUsed: string[]        // unique tool names seen in parts
@@ -63,11 +62,11 @@ export type HistoryEntry = {
 
 // Five-axis fingerprint, all values 0–1
 export type FingerprintAxes = {
-  autonomy: number       // avg turnDepth / 10, capped at 1
-  breadth: number        // avg unique projects/week / 5, capped at 1
-  iteration: number      // 1 − (avg wasteScore / 10)
-  toolDiversity: number  // unique tools used / all tools ever seen in history
-  outputDensity: number  // avg filesTouched.length / 10, capped at 1
+  autonomy: number          // avg turnDepth / 10, capped at 1
+  sessionFrequency: number  // avg sessions/week over last 90 days / 10, capped at 1
+  iteration: number         // 1 − (avg wasteScore / 10)
+  toolDiversity: number     // unique tools used / all tools ever seen in history
+  outputDensity: number     // avg filesTouched.length / 10, capped at 1
 }
 
 // One data point per calendar week

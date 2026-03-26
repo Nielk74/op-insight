@@ -13,16 +13,7 @@ export function getDbPath(): string {
 }
 
 const ERROR_RE = /error|failed|exit code [^0]|enoent|cannot|not found/i
-const PATH_RE = /(?:^|\s)([\w.-]+)\/[\w./-]+\.(ts|js|py|lua|go|rs|json|md)/i
 const FILE_TOOLS = new Set(['edit', 'write', 'read'])
-
-function inferProject(texts: string[]): string {
-  for (const text of texts) {
-    const m = text.match(PATH_RE)
-    if (m?.[1] && m[1] !== 'node_modules') return m[1]
-  }
-  return 'Unknown'
-}
 
 export function readSessionFacets(
   days: number,
@@ -178,7 +169,6 @@ export function readSessionFacets(
 
     facets.push({
       sessionId: sid,
-      projectName: inferProject(allTexts),
       date: new Date(sess.createdAt).toISOString().slice(0, 10),
       messageCount: sess.messages.length,
       toolsUsed,
