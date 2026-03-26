@@ -1,8 +1,9 @@
-import Database from 'better-sqlite3'
+// src/reader.ts
+import { Database } from 'bun:sqlite'
 import * as fs from 'node:fs'
 import * as os from 'node:os'
 import * as path from 'node:path'
-import type { Session, Message, MessagePart } from './types.js'
+import type { SessionFacet } from './types.js'
 
 export function getDbPath(): string {
   const dataDir = process.env.OPENCODE_DATA_DIR
@@ -10,97 +11,123 @@ export function getDbPath(): string {
   return path.join(dataDir, 'opencode.db')
 }
 
-export function readSessionsFromDb(
-  db: Database.Database,
+const KNOWN_TOOLS = ['bash', 'edit', 'read', 'write', 'grep', 'glob', 'webfetch', 'websearch', 'task']
+const ERROR_RE = /error|failed|exit code [^0]|enoent|cannot|not found/i
+const PATH_RE = /(?:^|\s)([\w.-]+)\/[\w./-]+\.(ts|js|py|lua|go|rs|json|md)/i
+
+function inferProject(texts: string[]): string {
+  for (const text of texts) {
+    const m = text.match(PATH_RE)
+    if (m?.[1] && m[1] !== 'node_modules') return m[1]
+  }
+  return 'Unknown'
+}
+
+export function readSessionFacets(
   days: number,
-  currentSessionId: string | undefined
-): Session[] {
+  currentSessionId: string | undefined,
+  limit?: number,
+  topic?: string,
+  errorsOnly?: boolean
+): SessionFacet[] {
+  const dbPath = getDbPath()
+  if (!fs.existsSync(dbPath)) {
+    throw new Error(`opencode database not found at ${dbPath}`)
+  }
+
+  const db = new Database(dbPath, { readonly: true })
   const cutoff = Date.now() - days * 24 * 60 * 60 * 1000
 
-  const rows = db.prepare(`
+  type Row = {
+    sid: string; screated: number; mid: string | null;
+    mrole: string | null; pdata: string | null
+  }
+
+  const rows = db.query<Row, unknown[]>(`
     SELECT
       s.id           AS sid,
-      s.project_id   AS sprojectid,
-      s.title        AS stitle,
       s.time_created AS screated,
-      s.time_updated AS supdated,
       m.id           AS mid,
-      m.time_created AS mcreated,
-      m.data         AS mdata,
-      p.id           AS pid,
+      JSON_EXTRACT(m.data, '$.role') AS mrole,
       p.data         AS pdata
     FROM session s
     LEFT JOIN message m ON m.session_id = s.id
     LEFT JOIN part p ON p.message_id = m.id
     WHERE s.time_created > ?
     ${currentSessionId ? 'AND s.id != ?' : ''}
-    ORDER BY s.id, m.time_created, p.id
-  `).all(
-    ...(currentSessionId ? [cutoff, currentSessionId] : [cutoff])
-  ) as Array<Record<string, unknown>>
+    ORDER BY s.time_created DESC, m.time_created, p.id
+  `).all(currentSessionId ? [cutoff, currentSessionId] : [cutoff])
 
-  // Group rows by session -> message -> parts
-  const sessionMap = new Map<string, Session>()
-  const messageMap = new Map<string, Message>()
+  db.close()
+
+  // Group by session
+  const sessionMap = new Map<string, {
+    createdAt: number
+    messages: Array<{ role: string; parts: Array<{ type: string; text: string }> }>
+    msgSet: Set<string>
+  }>()
 
   for (const row of rows) {
-    const sid = row['sid'] as string
-
-    if (!sessionMap.has(sid)) {
-      sessionMap.set(sid, {
-        id: sid,
-        projectId: (row['sprojectid'] as string) ?? '',
-        createdAt: row['screated'] as number,
-        updatedAt: row['supdated'] as number,
-        messages: [],
-      })
+    if (!sessionMap.has(row.sid)) {
+      sessionMap.set(row.sid, { createdAt: row.screated, messages: [], msgSet: new Set() })
     }
-
-    const mid = row['mid'] as string | null
-    if (!mid) continue
-
-    if (!messageMap.has(mid)) {
-      let mdata: { role?: string } = {}
-      try { mdata = JSON.parse(row['mdata'] as string) } catch { continue }
-
-      const msg: Message = {
-        role: (mdata.role === 'assistant' ? 'assistant' : 'user') as 'user' | 'assistant',
-        parts: [],
-      }
-      messageMap.set(mid, msg)
-      sessionMap.get(sid)!.messages.push(msg)
+    const sess = sessionMap.get(row.sid)!
+    if (!row.mid || !row.pdata) continue
+    if (!sess.msgSet.has(row.mid)) {
+      sess.msgSet.add(row.mid)
+      sess.messages.push({ role: row.mrole ?? 'user', parts: [] })
     }
-
-    const pid = row['pid'] as string | null
-    if (!pid) continue
-
     let pdata: { type?: string; text?: string; content?: string } = {}
-    try { pdata = JSON.parse(row['pdata'] as string) } catch { continue }
+    try { pdata = JSON.parse(row.pdata) } catch { continue }
+    const lastMsg = sess.messages[sess.messages.length - 1]
+    lastMsg.parts.push({ type: pdata.type ?? 'text', text: pdata.text ?? pdata.content ?? '' })
+  }
 
-    messageMap.get(mid)!.parts.push({
-      type: pdata.type ?? 'text',
-      content: pdata.text ?? pdata.content ?? '',
+  let facets: SessionFacet[] = []
+
+  for (const [sid, sess] of sessionMap) {
+    const allTexts = sess.messages.flatMap(m => m.parts.map(p => p.text))
+    const assistantTexts = sess.messages
+      .filter(m => m.role === 'assistant')
+      .flatMap(m => m.parts.map(p => p.text))
+
+    const toolsUsed = Array.from(new Set(
+      sess.messages.flatMap(m => m.parts)
+        .map(p => p.type?.toLowerCase() ?? '')
+        .filter(t => KNOWN_TOOLS.some(k => t.includes(k)))
+        .map(t => KNOWN_TOOLS.find(k => t.includes(k))!)
+    ))
+
+    const errorSnippets: string[] = []
+    for (const text of assistantTexts) {
+      for (const line of text.split('\n')) {
+        if (ERROR_RE.test(line) && errorSnippets.length < 5) {
+          errorSnippets.push(line.trim().slice(0, 120))
+        }
+      }
+    }
+
+    const firstUserMsg = sess.messages
+      .find(m => m.role === 'user')
+      ?.parts.map(p => p.text).join(' ')
+      .slice(0, 200) ?? ''
+
+    const fullText = allTexts.join(' ')
+
+    if (topic && !fullText.toLowerCase().includes(topic.toLowerCase())) continue
+    if (errorsOnly && errorSnippets.length === 0) continue
+
+    facets.push({
+      sessionId: sid,
+      projectName: inferProject(allTexts),
+      date: new Date(sess.createdAt).toISOString().slice(0, 10),
+      messageCount: sess.messages.length,
+      toolsUsed,
+      errorSnippets,
+      firstUserMessage: firstUserMsg,
     })
   }
 
-  return Array.from(sessionMap.values())
-}
-
-export function readSessions(days: number): Session[] {
-  const dbPath = getDbPath()
-
-  if (!fs.existsSync(dbPath)) {
-    throw new Error(
-      `opencode database not found at ${dbPath}. Is opencode installed and has it been used?`
-    )
-  }
-
-  const db = new Database(dbPath, { readonly: true })
-  const currentSessionId = process.env.OPENCODE_SESSION_ID
-
-  try {
-    return readSessionsFromDb(db, days, currentSessionId)
-  } finally {
-    db.close()
-  }
+  if (limit) facets = facets.slice(0, limit)
+  return facets
 }
