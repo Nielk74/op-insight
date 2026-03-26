@@ -13054,7 +13054,7 @@ function renderReport(data) {
   <div id="panel-fingerprint" class="panel"><canvas id="radar-canvas" width="400" height="340"></canvas><ul id="fp-descriptions" class="fp-desc"></ul></div>
   <div id="panel-timeline" class="panel"><div id="timeline-rows"></div></div>
   <div id="panel-cards" class="panel"><div id="cards-list"></div></div>
-  <script>const INSIGHTS_DATA = ${dataJson};</script>
+  <script>window.INSIGHTS_DATA = ${dataJson};</script>
   <script>${SPA_SCRIPT}</script>
 </body>
 </html>`;
