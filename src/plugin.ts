@@ -2,7 +2,8 @@
 import type { Plugin } from '@opencode-ai/plugin'
 import { tool } from '@opencode-ai/plugin'
 import { readSessionFacets } from './reader.js'
-import { saveAndOpenReport } from './reporter.js'
+import { saveAndOpenReport, getInsightsDir } from './reporter.js'
+import { savePending } from './history.js'
 import type { InsightReport } from './types.js'
 
 const REPORT_SCHEMA_DESC = `JSON string with these fields: generatedAt (ISO timestamp), periodDays (number), sessionCount (number), atAGlance ({workingWell, hindering, quickWins}), behavioralProfile (string), projects ([{name, sessionCount, description}]), topTools ([{name, count}]), workflowInsights ({strengths:[{title,detail}], frictionPoints:[{title,detail,examples:[]}], behavioralProfile}), codeQualityInsights ({recurringPatterns:[], recommendations:[]}), opencodeConfigSuggestions ([{description, rule}]), featureRecommendations ([{title, why}]). Write in second person. Cite specific project names, tool names, and error messages from the data.`
@@ -30,6 +31,11 @@ export const InsightsPlugin: Plugin = async () => {
             )
           } catch (e) {
             return `Error reading session data: ${e}`
+          }
+          try {
+            savePending(getInsightsDir(), facets, args.days)
+          } catch (_) {
+            // non-fatal
           }
           return JSON.stringify({
             periodDays: args.days,
