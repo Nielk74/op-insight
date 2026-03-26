@@ -4,7 +4,15 @@ A native [opencode](https://opencode.ai) plugin that generates a rich insights r
 
 ## Installation
 
-Add to your `opencode.json`:
+### Option 1: From npm (recommended)
+
+1. Install the package globally:
+
+```bash
+npm install -g opencode-insights
+```
+
+2. Add it to your opencode config at `~/.config/opencode/config.json`:
 
 ```json
 {
@@ -12,7 +20,32 @@ Add to your `opencode.json`:
 }
 ```
 
-opencode will auto-install the plugin on next startup.
+opencode will load the plugin automatically on next startup.
+
+### Option 2: From source (local path)
+
+1. Clone and build:
+
+```bash
+git clone https://github.com/Nielk74/op-insight
+cd op-insight
+npm install
+npm run build
+```
+
+2. Add the absolute path to your opencode config at `~/.config/opencode/config.json`:
+
+```json
+{
+  "plugin": ["C:\\absolute\\path\\to\\op-insight"]
+}
+```
+
+> **Where is the config file?**
+> - Windows: `C:\Users\<you>\.config\opencode\config.json`
+> - macOS/Linux: `~/.config/opencode/config.json`
+>
+> Create it if it doesn't exist yet.
 
 ## Usage
 
@@ -51,19 +84,3 @@ The plugin exposes two tools that the LLM uses automatically:
 - opencode config suggestions (copy-pasteable JSON)
 - Feature recommendations
 
-## Development
-
-```bash
-git clone https://github.com/Nielk74/op-insight
-cd op-insight
-npm install
-npm run build
-```
-
-To use a local version in opencode, add the absolute path to your `opencode.json`:
-
-```json
-{
-  "plugin": ["/absolute/path/to/op-insight"]
-}
-```
