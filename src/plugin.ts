@@ -3,7 +3,7 @@ import type { Plugin } from '@opencode-ai/plugin'
 import { tool } from '@opencode-ai/plugin'
 import { readSessionFacets } from './reader.js'
 import { saveAndOpenReport, getInsightsDir } from './reporter.js'
-import { savePending } from './history.js'
+import { savePending, readHistory, deleteFromHistory } from './history.js'
 import type { InsightReport } from './types.js'
 
 const REPORT_SCHEMA_DESC = `JSON string with these fields: generatedAt (ISO timestamp), periodDays (number), sessionCount (number), atAGlance ({workingWell, hindering, quickWins}), behavioralProfile (string), projects ([{name, sessionCount, description}]), topTools ([{name, count}]), workflowInsights ({strengths:[{title,detail}], frictionPoints:[{title,detail,examples:[]}], behavioralProfile}), codeQualityInsights ({recurringPatterns:[], recommendations:[]}), opencodeConfigSuggestions ([{description, rule}]), featureRecommendations ([{title, why}]). Write in second person. Cite specific project names, tool names, and error messages from the data.`
@@ -64,6 +64,30 @@ export const InsightsPlugin: Plugin = async () => {
             return `Error saving report: ${e instanceof Error ? e.stack ?? e.message : String(e)}`
           }
           return `Report saved to ${outPath} and opened in browser.`
+        },
+      }),
+      insights_list_runs: tool({
+        description: 'List all runs stored in history.json, showing runAt timestamps and session counts. Use this before insights_delete_run to find the runAt value to delete.',
+        args: {},
+        async execute() {
+          const history = readHistory(getInsightsDir())
+          if (history.length === 0) return 'No history entries found.'
+          return history.map((e, i) =>
+            `[${i + 1}] runAt: ${e.runAt} | ${e.sessions.length} sessions | ${e.periodDays}d window`
+          ).join('\n')
+        },
+      }),
+
+      insights_delete_run: tool({
+        description: 'Remove a specific run from history.json by its exact runAt timestamp. Use insights_list_runs first to find the runAt value.',
+        args: {
+          run_at: tool.schema.string().describe('Exact runAt timestamp of the run to delete (e.g. "2026-03-26T21:39:37.743Z")'),
+        },
+        async execute(args) {
+          const removed = deleteFromHistory(getInsightsDir(), args.run_at)
+          if (!removed) return `No run found with runAt="${args.run_at}". Use insights_list_runs to see available entries.`
+          const remaining = readHistory(getInsightsDir()).length
+          return `Deleted run from ${args.run_at}. History now has ${remaining} entries.`
         },
       }),
     },

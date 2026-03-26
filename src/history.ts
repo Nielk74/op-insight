@@ -55,3 +55,12 @@ export function deletePending(dataDir: string): void {
   const p = path.join(dataDir, PENDING_FILE)
   if (fs.existsSync(p)) fs.unlinkSync(p)
 }
+
+/** Remove a single run entry from history by its runAt timestamp. Returns true if found and removed. */
+export function deleteFromHistory(dataDir: string, runAt: string): boolean {
+  const existing = readHistory(dataDir)
+  const filtered = existing.filter(e => e.runAt !== runAt)
+  if (filtered.length === existing.length) return false
+  fs.writeFileSync(path.join(dataDir, HISTORY_FILE), JSON.stringify(filtered, null, 2), 'utf-8')
+  return true
+}

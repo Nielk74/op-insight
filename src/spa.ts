@@ -6,7 +6,7 @@
 export const SPA_SCRIPT = `
 (function () {
   var data = window.INSIGHTS_DATA;
-  var panels = ['trends', 'fingerprint', 'timeline', 'cards'];
+  var panels = ['summary', 'trends', 'fingerprint', 'timeline', 'cards'];
 
   // ── Tab Navigation ──────────────────────────────────────────────
   function showTab(name) {
@@ -118,6 +118,85 @@ export const SPA_SCRIPT = `
     });
   }
 
+  // ── Summary Panel ───────────────────────────────────────────────
+  // Coerce a value that might be string, array, or object to a display string
+  function toStr(v) {
+    if (!v) return '';
+    if (typeof v === 'string') return v;
+    if (Array.isArray(v)) return v.map(function(x) { return toStr(x); }).join('. ');
+    if (typeof v === 'object') return Object.values(v).map(function(x) { return toStr(x); }).join('. ');
+    return String(v);
+  }
+
+  function renderSummary() {
+    var s = data.summary;
+    var container = document.getElementById('panel-summary');
+    if (!s) {
+      container.innerHTML = '<p class="muted">No LLM summary available. Re-generate the report to populate this panel.</p>';
+      return;
+    }
+
+    var sessions = data.current.sessions;
+    var totalMsgs = sessions.reduce(function(a, b) { return a + b.messageCount; }, 0);
+    var avgTurns = sessions.length ? (sessions.reduce(function(a,b){return a+b.turnDepth;},0)/sessions.length).toFixed(1) : '0';
+
+    var glance = s.atAGlance || {};
+    var wf = s.workflowInsights || {};
+    var strengths = wf.strengths || [];
+    var frictions = wf.frictionPoints || [];
+    var projects = s.projects || [];
+    var featRecs = s.featureRecommendations || [];
+
+    container.innerHTML =
+      '<div class="stats-bar">' +
+        '<div class="stat"><div class="stat-val">' + sessions.length + '</div><div class="stat-lbl">Sessions</div></div>' +
+        '<div class="stat"><div class="stat-val">' + totalMsgs + '</div><div class="stat-lbl">Messages</div></div>' +
+        '<div class="stat"><div class="stat-val">' + avgTurns + '</div><div class="stat-lbl">Avg turns</div></div>' +
+        '<div class="stat"><div class="stat-val">' + data.current.periodDays + 'd</div><div class="stat-lbl">Period</div></div>' +
+      '</div>' +
+
+      '<div class="summary-section"><h2 class="section-title">At a Glance</h2>' +
+        '<div class="glance-grid">' +
+          '<div class="glance-card glance-good"><div class="glance-label">\u2705 Working well</div><p>' + esc(toStr(glance.workingWell)) + '</p></div>' +
+          '<div class="glance-card glance-bad"><div class="glance-label">\u26a0\ufe0f Hindering</div><p>' + esc(toStr(glance.hindering)) + '</p></div>' +
+          '<div class="glance-card glance-tip"><div class="glance-label">\u26a1 Quick wins</div><p>' + esc(toStr(glance.quickWins)) + '</p></div>' +
+        '</div>' +
+      '</div>' +
+
+      (s.behavioralProfile ? '<div class="summary-section"><h2 class="section-title">How You Use opencode</h2><p class="profile-text">' + esc(toStr(s.behavioralProfile)) + '</p></div>' : '') +
+
+      (projects.length ? '<div class="summary-section"><h2 class="section-title">Projects</h2><div class="proj-list">' +
+        projects.map(function(p) {
+          var count = p.sessionCount ?? p.sessions ?? '';
+          return '<div class="proj-card"><div class="proj-header"><span class="proj-name">' + esc(p.name || 'Unknown') + '</span>' +
+            (count !== '' ? '<span class="proj-count">' + count + ' sessions</span>' : '') + '</div>' +
+            '<p class="proj-desc">' + esc(toStr(p.description || p.toolUsage)) + '</p></div>';
+        }).join('') + '</div></div>' : '') +
+
+      (strengths.length ? '<div class="summary-section"><h2 class="section-title">Strengths</h2>' +
+        strengths.map(function(x) {
+          var title = typeof x === 'string' ? x : (x.title || '');
+          var detail = typeof x === 'string' ? '' : (x.detail || '');
+          return '<div class="insight-item insight-strength"><strong>' + esc(title) + '</strong>' + (detail ? '<p>' + esc(detail) + '</p>' : '') + '</div>';
+        }).join('') + '</div>' : '') +
+
+      (frictions.length ? '<div class="summary-section"><h2 class="section-title">Friction Points</h2>' +
+        frictions.map(function(x) {
+          var title = typeof x === 'string' ? x : (x.title || '');
+          var detail = typeof x === 'string' ? '' : (x.detail || '');
+          var examples = Array.isArray(x.examples) ? x.examples.map(function(e) { return '<li>' + esc(e) + '</li>'; }).join('') : '';
+          return '<div class="insight-item insight-friction"><strong>' + esc(title) + '</strong>' + (detail ? '<p>' + esc(detail) + '</p>' : '') +
+            (examples ? '<ul class="example-list">' + examples + '</ul>' : '') + '</div>';
+        }).join('') + '</div>' : '') +
+
+      (featRecs.length ? '<div class="summary-section"><h2 class="section-title">Feature Recommendations</h2>' +
+        featRecs.map(function(r) {
+          var title = typeof r === 'string' ? r : (r.title || r.feature || '');
+          var why = typeof r === 'string' ? '' : (r.why || r.benefit || '');
+          return '<div class="insight-item"><strong>' + esc(title) + '</strong>' + (why ? '<p>' + esc(why) + '</p>' : '') + '</div>';
+        }).join('') + '</div>' : '');
+  }
+
   // ── Trends Panel ────────────────────────────────────────────────
   function renderTrends() {
     var trends = data.trends;
@@ -149,6 +228,44 @@ export const SPA_SCRIPT = `
       }
       grid.appendChild(card);
       drawSparkline(canvas, values, cfg.color);
+    });
+
+    // Time-of-day bar chart (uses all history sessions)
+    var allSessions = (function() {
+      var seen = {};
+      var out = [];
+      data.history.forEach(function(e) { e.sessions.forEach(function(s) { if (!seen[s.sessionId]) { seen[s.sessionId] = true; out.push(s); } }); });
+      data.current.sessions.forEach(function(s) { if (!seen[s.sessionId]) { seen[s.sessionId] = true; out.push(s); } });
+      return out;
+    })();
+    var hourCounts = new Array(24).fill(0);
+    allSessions.forEach(function(s) { if (s.hourOfDay != null) hourCounts[s.hourOfDay]++; });
+    var maxHour = Math.max.apply(null, hourCounts) || 1;
+
+    var todCard = document.createElement('div');
+    todCard.className = 'spark-card tod-card';
+    todCard.style.gridColumn = '1 / -1';
+    todCard.innerHTML = '<div class="spark-label">Sessions by Time of Day (all history)</div>';
+    var todCanvas = document.createElement('canvas');
+    todCanvas.width = 700; todCanvas.height = 80;
+    todCard.appendChild(todCanvas);
+    grid.appendChild(todCard);
+
+    var tc = todCanvas.getContext('2d');
+    var tw = todCanvas.width, th = todCanvas.height;
+    var barW = tw / 24;
+    var labels = ['12a','','2a','','4a','','6a','','8a','','10a','','12p','','2p','','4p','','6p','','8p','','10p',''];
+    hourCounts.forEach(function(count, h) {
+      var bh = Math.max((count / maxHour) * (th - 18), count > 0 ? 2 : 0);
+      var x = h * barW;
+      tc.fillStyle = (h >= 9 && h <= 18) ? '#0969da' : '#8bc0f0';
+      tc.fillRect(x + 1, th - 16 - bh, barW - 2, bh);
+      if (labels[h]) {
+        tc.fillStyle = '#57606a';
+        tc.font = '9px system-ui,sans-serif';
+        tc.textAlign = 'center';
+        tc.fillText(labels[h], x + barW / 2, th - 2);
+      }
     });
   }
 
@@ -292,12 +409,13 @@ export const SPA_SCRIPT = `
   }
 
   // ── Init ────────────────────────────────────────────────────────
-  showTab('trends');
+  showTab('summary');
   var titleEl = document.getElementById('nav-title');
   if (titleEl) {
     var d = new Date(data.current.runAt);
     titleEl.textContent = data.current.periodDays + 'd \u00b7 ' + data.current.sessions.length + ' sessions \u00b7 ' + d.toLocaleDateString();
   }
+  renderSummary();
   renderTrends();
   renderFingerprint();
   renderTimeline();

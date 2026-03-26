@@ -174,6 +174,7 @@ export function readSessionFacets(
     const duration = sortedTimes.length >= 2
       ? sortedTimes[sortedTimes.length - 1] - sortedTimes[0]
       : 0
+    const hourOfDay = new Date(sortedTimes[0] ?? sess.createdAt).getHours()
 
     facets.push({
       sessionId: sid,
@@ -188,6 +189,7 @@ export function readSessionFacets(
       messageCounts: { user: sess.userCount, assistant: sess.assistantCount },
       filesTouched: Array.from(sess.filesTouched),
       turnDepth: sess.turnDepth,
+      hourOfDay,
     })
   }
 

@@ -51,6 +51,7 @@ export type ExtendedSessionFacet = SessionFacet & {
   messageCounts: { user: number; assistant: number }
   filesTouched: string[]                        // paths from edit/write/read tool inputs
   turnDepth: number                             // count of step-finish parts (= LLM generations)
+  hourOfDay: number                             // 0–23, hour of first message (local time)
 }
 
 // One entry per report run, stored in history.json
@@ -87,5 +88,6 @@ export type InsightsData = {
   }
   history: HistoryEntry[]
   fingerprint: FingerprintAxes
-  trends: TrendPoint[]   // last 12 weeks
+  trends: TrendPoint[]         // last 12 weeks
+  summary?: InsightReport      // LLM-generated analysis, optional
 }

@@ -12625,6 +12625,7 @@ function readSessionFacets(days, currentSessionId, limit, topic, errorsOnly) {
     if (errorsOnly && sess.toolParts.every((p) => !p.hasError)) continue;
     const sortedTimes = sess.msgTimes.filter(Boolean).sort((a, b) => a - b);
     const duration3 = sortedTimes.length >= 2 ? sortedTimes[sortedTimes.length - 1] - sortedTimes[0] : 0;
+    const hourOfDay = new Date(sortedTimes[0] ?? sess.createdAt).getHours();
     facets.push({
       sessionId: sid,
       projectName: inferProject(allTexts),
@@ -12637,7 +12638,8 @@ function readSessionFacets(days, currentSessionId, limit, topic, errorsOnly) {
       wasteScore: computeWasteScore(sess.toolParts),
       messageCounts: { user: sess.userCount, assistant: sess.assistantCount },
       filesTouched: Array.from(sess.filesTouched),
-      turnDepth: sess.turnDepth
+      turnDepth: sess.turnDepth,
+      hourOfDay
     });
   }
   if (limit != null) facets = facets.slice(0, limit);
@@ -12693,12 +12695,19 @@ function deletePending(dataDir) {
   const p = path2.join(dataDir, PENDING_FILE);
   if (fs2.existsSync(p)) fs2.unlinkSync(p);
 }
+function deleteFromHistory(dataDir, runAt) {
+  const existing = readHistory(dataDir);
+  const filtered = existing.filter((e) => e.runAt !== runAt);
+  if (filtered.length === existing.length) return false;
+  fs2.writeFileSync(path2.join(dataDir, HISTORY_FILE), JSON.stringify(filtered, null, 2), "utf-8");
+  return true;
+}
 
 // src/spa.ts
 var SPA_SCRIPT = `
 (function () {
   var data = window.INSIGHTS_DATA;
-  var panels = ['trends', 'fingerprint', 'timeline', 'cards'];
+  var panels = ['summary', 'trends', 'fingerprint', 'timeline', 'cards'];
 
   // \u2500\u2500 Tab Navigation \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
   function showTab(name) {
@@ -12810,6 +12819,85 @@ var SPA_SCRIPT = `
     });
   }
 
+  // \u2500\u2500 Summary Panel \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+  // Coerce a value that might be string, array, or object to a display string
+  function toStr(v) {
+    if (!v) return '';
+    if (typeof v === 'string') return v;
+    if (Array.isArray(v)) return v.map(function(x) { return toStr(x); }).join('. ');
+    if (typeof v === 'object') return Object.values(v).map(function(x) { return toStr(x); }).join('. ');
+    return String(v);
+  }
+
+  function renderSummary() {
+    var s = data.summary;
+    var container = document.getElementById('panel-summary');
+    if (!s) {
+      container.innerHTML = '<p class="muted">No LLM summary available. Re-generate the report to populate this panel.</p>';
+      return;
+    }
+
+    var sessions = data.current.sessions;
+    var totalMsgs = sessions.reduce(function(a, b) { return a + b.messageCount; }, 0);
+    var avgTurns = sessions.length ? (sessions.reduce(function(a,b){return a+b.turnDepth;},0)/sessions.length).toFixed(1) : '0';
+
+    var glance = s.atAGlance || {};
+    var wf = s.workflowInsights || {};
+    var strengths = wf.strengths || [];
+    var frictions = wf.frictionPoints || [];
+    var projects = s.projects || [];
+    var featRecs = s.featureRecommendations || [];
+
+    container.innerHTML =
+      '<div class="stats-bar">' +
+        '<div class="stat"><div class="stat-val">' + sessions.length + '</div><div class="stat-lbl">Sessions</div></div>' +
+        '<div class="stat"><div class="stat-val">' + totalMsgs + '</div><div class="stat-lbl">Messages</div></div>' +
+        '<div class="stat"><div class="stat-val">' + avgTurns + '</div><div class="stat-lbl">Avg turns</div></div>' +
+        '<div class="stat"><div class="stat-val">' + data.current.periodDays + 'd</div><div class="stat-lbl">Period</div></div>' +
+      '</div>' +
+
+      '<div class="summary-section"><h2 class="section-title">At a Glance</h2>' +
+        '<div class="glance-grid">' +
+          '<div class="glance-card glance-good"><div class="glance-label">\u2705 Working well</div><p>' + esc(toStr(glance.workingWell)) + '</p></div>' +
+          '<div class="glance-card glance-bad"><div class="glance-label">\u26A0\uFE0F Hindering</div><p>' + esc(toStr(glance.hindering)) + '</p></div>' +
+          '<div class="glance-card glance-tip"><div class="glance-label">\u26A1 Quick wins</div><p>' + esc(toStr(glance.quickWins)) + '</p></div>' +
+        '</div>' +
+      '</div>' +
+
+      (s.behavioralProfile ? '<div class="summary-section"><h2 class="section-title">How You Use opencode</h2><p class="profile-text">' + esc(toStr(s.behavioralProfile)) + '</p></div>' : '') +
+
+      (projects.length ? '<div class="summary-section"><h2 class="section-title">Projects</h2><div class="proj-list">' +
+        projects.map(function(p) {
+          var count = p.sessionCount ?? p.sessions ?? '';
+          return '<div class="proj-card"><div class="proj-header"><span class="proj-name">' + esc(p.name || 'Unknown') + '</span>' +
+            (count !== '' ? '<span class="proj-count">' + count + ' sessions</span>' : '') + '</div>' +
+            '<p class="proj-desc">' + esc(toStr(p.description || p.toolUsage)) + '</p></div>';
+        }).join('') + '</div></div>' : '') +
+
+      (strengths.length ? '<div class="summary-section"><h2 class="section-title">Strengths</h2>' +
+        strengths.map(function(x) {
+          var title = typeof x === 'string' ? x : (x.title || '');
+          var detail = typeof x === 'string' ? '' : (x.detail || '');
+          return '<div class="insight-item insight-strength"><strong>' + esc(title) + '</strong>' + (detail ? '<p>' + esc(detail) + '</p>' : '') + '</div>';
+        }).join('') + '</div>' : '') +
+
+      (frictions.length ? '<div class="summary-section"><h2 class="section-title">Friction Points</h2>' +
+        frictions.map(function(x) {
+          var title = typeof x === 'string' ? x : (x.title || '');
+          var detail = typeof x === 'string' ? '' : (x.detail || '');
+          var examples = Array.isArray(x.examples) ? x.examples.map(function(e) { return '<li>' + esc(e) + '</li>'; }).join('') : '';
+          return '<div class="insight-item insight-friction"><strong>' + esc(title) + '</strong>' + (detail ? '<p>' + esc(detail) + '</p>' : '') +
+            (examples ? '<ul class="example-list">' + examples + '</ul>' : '') + '</div>';
+        }).join('') + '</div>' : '') +
+
+      (featRecs.length ? '<div class="summary-section"><h2 class="section-title">Feature Recommendations</h2>' +
+        featRecs.map(function(r) {
+          var title = typeof r === 'string' ? r : (r.title || r.feature || '');
+          var why = typeof r === 'string' ? '' : (r.why || r.benefit || '');
+          return '<div class="insight-item"><strong>' + esc(title) + '</strong>' + (why ? '<p>' + esc(why) + '</p>' : '') + '</div>';
+        }).join('') + '</div>' : '');
+  }
+
   // \u2500\u2500 Trends Panel \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
   function renderTrends() {
     var trends = data.trends;
@@ -12841,6 +12929,44 @@ var SPA_SCRIPT = `
       }
       grid.appendChild(card);
       drawSparkline(canvas, values, cfg.color);
+    });
+
+    // Time-of-day bar chart (uses all history sessions)
+    var allSessions = (function() {
+      var seen = {};
+      var out = [];
+      data.history.forEach(function(e) { e.sessions.forEach(function(s) { if (!seen[s.sessionId]) { seen[s.sessionId] = true; out.push(s); } }); });
+      data.current.sessions.forEach(function(s) { if (!seen[s.sessionId]) { seen[s.sessionId] = true; out.push(s); } });
+      return out;
+    })();
+    var hourCounts = new Array(24).fill(0);
+    allSessions.forEach(function(s) { if (s.hourOfDay != null) hourCounts[s.hourOfDay]++; });
+    var maxHour = Math.max.apply(null, hourCounts) || 1;
+
+    var todCard = document.createElement('div');
+    todCard.className = 'spark-card tod-card';
+    todCard.style.gridColumn = '1 / -1';
+    todCard.innerHTML = '<div class="spark-label">Sessions by Time of Day (all history)</div>';
+    var todCanvas = document.createElement('canvas');
+    todCanvas.width = 700; todCanvas.height = 80;
+    todCard.appendChild(todCanvas);
+    grid.appendChild(todCard);
+
+    var tc = todCanvas.getContext('2d');
+    var tw = todCanvas.width, th = todCanvas.height;
+    var barW = tw / 24;
+    var labels = ['12a','','2a','','4a','','6a','','8a','','10a','','12p','','2p','','4p','','6p','','8p','','10p',''];
+    hourCounts.forEach(function(count, h) {
+      var bh = Math.max((count / maxHour) * (th - 18), count > 0 ? 2 : 0);
+      var x = h * barW;
+      tc.fillStyle = (h >= 9 && h <= 18) ? '#0969da' : '#8bc0f0';
+      tc.fillRect(x + 1, th - 16 - bh, barW - 2, bh);
+      if (labels[h]) {
+        tc.fillStyle = '#57606a';
+        tc.font = '9px system-ui,sans-serif';
+        tc.textAlign = 'center';
+        tc.fillText(labels[h], x + barW / 2, th - 2);
+      }
     });
   }
 
@@ -12984,12 +13110,13 @@ var SPA_SCRIPT = `
   }
 
   // \u2500\u2500 Init \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
-  showTab('trends');
+  showTab('summary');
   var titleEl = document.getElementById('nav-title');
   if (titleEl) {
     var d = new Date(data.current.runAt);
     titleEl.textContent = data.current.periodDays + 'd \xB7 ' + data.current.sessions.length + ' sessions \xB7 ' + d.toLocaleDateString();
   }
+  renderSummary();
   renderTrends();
   renderFingerprint();
   renderTimeline();
@@ -13049,16 +13176,45 @@ function renderReport(data) {
     .highlight { background: rgba(9, 105, 218, .08); }
     .detail-row { margin-bottom: .4rem; font-size: .85rem; }
     .detail-list { margin: .25rem 0 0 1rem; font-size: .8rem; color: #57606a; }
+    /* Summary panel */
+    .stats-bar { display: flex; gap: 1.5rem; margin-bottom: 1.5rem; flex-wrap: wrap; }
+    .stat { background: #fff; border: 1px solid #d0d7de; border-radius: 8px; padding: .75rem 1.25rem; text-align: center; min-width: 80px; }
+    .stat-val { font-size: 1.5rem; font-weight: 700; color: #1f2328; }
+    .stat-lbl { font-size: .75rem; color: #57606a; margin-top: 2px; }
+    .summary-section { margin-bottom: 1.5rem; }
+    .section-title { font-size: 1rem; font-weight: 600; margin-bottom: .75rem; color: #1f2328; border-bottom: 1px solid #d0d7de; padding-bottom: .4rem; }
+    .glance-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: .75rem; }
+    .glance-card { background: #fff; border: 1px solid #d0d7de; border-radius: 8px; padding: 1rem; font-size: .875rem; line-height: 1.6; }
+    .glance-good { border-left: 3px solid #1a7f37; }
+    .glance-bad  { border-left: 3px solid #cf222e; }
+    .glance-tip  { border-left: 3px solid #9a6700; }
+    .glance-label { font-weight: 600; margin-bottom: .4rem; font-size: .8rem; color: #57606a; }
+    .profile-text { font-size: .9rem; line-height: 1.7; color: #1f2328; background: #fff; border: 1px solid #d0d7de; border-radius: 8px; padding: 1rem; }
+    .proj-list { display: flex; flex-direction: column; gap: .5rem; }
+    .proj-card { background: #fff; border: 1px solid #d0d7de; border-radius: 8px; padding: .75rem 1rem; }
+    .proj-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: .3rem; }
+    .proj-name { font-weight: 600; color: #0969da; }
+    .proj-count { font-size: .75rem; color: #57606a; }
+    .proj-desc { font-size: .85rem; color: #57606a; line-height: 1.5; }
+    .insight-item { background: #fff; border: 1px solid #d0d7de; border-radius: 8px; padding: .75rem 1rem; margin-bottom: .5rem; font-size: .875rem; line-height: 1.6; }
+    .insight-strength { border-left: 3px solid #1a7f37; }
+    .insight-friction  { border-left: 3px solid #cf222e; }
+    .insight-item strong { display: block; margin-bottom: .25rem; }
+    .example-list { margin: .5rem 0 0 1rem; font-size: .8rem; color: #57606a; }
+    .muted { color: #57606a; font-size: .9rem; padding: 2rem 0; }
+    .tod-card canvas { margin-top: .5rem; width: 100%; }
   </style>
 </head>
 <body>
   <nav>
     <h1 id="nav-title"></h1>
+    <button onclick="showTab('summary')" id="tab-summary">Summary</button>
     <button onclick="showTab('trends')" id="tab-trends">Trends</button>
     <button onclick="showTab('fingerprint')" id="tab-fingerprint">Fingerprint</button>
     <button onclick="showTab('timeline')" id="tab-timeline">Timeline</button>
     <button onclick="showTab('cards')" id="tab-cards">Sessions</button>
   </nav>
+  <div id="panel-summary" class="panel"></div>
   <div id="panel-trends" class="panel"><div id="trends-grid" class="grid2"></div></div>
   <div id="panel-fingerprint" class="panel"><div class="fp-layout"><canvas id="radar-canvas" width="400" height="340"></canvas><ul id="fp-descriptions" class="fp-desc"></ul></div></div>
   <div id="panel-timeline" class="panel"><div id="timeline-rows"></div></div>
@@ -13079,7 +13235,7 @@ function saveAndOpenReport(report) {
   appendToHistory(insightsDir, entry);
   const fingerprint = computeFingerprint([...historyBefore, entry]);
   const trends = computeTrends([...historyBefore, entry]);
-  const data = { current: entry, history: historyBefore, fingerprint, trends };
+  const data = { current: entry, history: historyBefore, fingerprint, trends, summary: report };
   const html = renderReport(data);
   const timestamp = runAt.replace(/[:.]/g, "-").slice(0, 23);
   const outPath = path3.join(insightsDir, `report-${timestamp}.html`);
@@ -13154,6 +13310,29 @@ var InsightsPlugin = async () => {
             return `Error saving report: ${e instanceof Error ? e.stack ?? e.message : String(e)}`;
           }
           return `Report saved to ${outPath} and opened in browser.`;
+        }
+      }),
+      insights_list_runs: tool({
+        description: "List all runs stored in history.json, showing runAt timestamps and session counts. Use this before insights_delete_run to find the runAt value to delete.",
+        args: {},
+        async execute() {
+          const history = readHistory(getInsightsDir());
+          if (history.length === 0) return "No history entries found.";
+          return history.map(
+            (e, i) => `[${i + 1}] runAt: ${e.runAt} | ${e.sessions.length} sessions | ${e.periodDays}d window`
+          ).join("\n");
+        }
+      }),
+      insights_delete_run: tool({
+        description: "Remove a specific run from history.json by its exact runAt timestamp. Use insights_list_runs first to find the runAt value.",
+        args: {
+          run_at: tool.schema.string().describe('Exact runAt timestamp of the run to delete (e.g. "2026-03-26T21:39:37.743Z")')
+        },
+        async execute(args) {
+          const removed = deleteFromHistory(getInsightsDir(), args.run_at);
+          if (!removed) return `No run found with runAt="${args.run_at}". Use insights_list_runs to see available entries.`;
+          const remaining = readHistory(getInsightsDir()).length;
+          return `Deleted run from ${args.run_at}. History now has ${remaining} entries.`;
         }
       })
     }

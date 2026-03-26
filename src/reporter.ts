@@ -60,16 +60,45 @@ export function renderReport(data: InsightsData): string {
     .highlight { background: rgba(9, 105, 218, .08); }
     .detail-row { margin-bottom: .4rem; font-size: .85rem; }
     .detail-list { margin: .25rem 0 0 1rem; font-size: .8rem; color: #57606a; }
+    /* Summary panel */
+    .stats-bar { display: flex; gap: 1.5rem; margin-bottom: 1.5rem; flex-wrap: wrap; }
+    .stat { background: #fff; border: 1px solid #d0d7de; border-radius: 8px; padding: .75rem 1.25rem; text-align: center; min-width: 80px; }
+    .stat-val { font-size: 1.5rem; font-weight: 700; color: #1f2328; }
+    .stat-lbl { font-size: .75rem; color: #57606a; margin-top: 2px; }
+    .summary-section { margin-bottom: 1.5rem; }
+    .section-title { font-size: 1rem; font-weight: 600; margin-bottom: .75rem; color: #1f2328; border-bottom: 1px solid #d0d7de; padding-bottom: .4rem; }
+    .glance-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: .75rem; }
+    .glance-card { background: #fff; border: 1px solid #d0d7de; border-radius: 8px; padding: 1rem; font-size: .875rem; line-height: 1.6; }
+    .glance-good { border-left: 3px solid #1a7f37; }
+    .glance-bad  { border-left: 3px solid #cf222e; }
+    .glance-tip  { border-left: 3px solid #9a6700; }
+    .glance-label { font-weight: 600; margin-bottom: .4rem; font-size: .8rem; color: #57606a; }
+    .profile-text { font-size: .9rem; line-height: 1.7; color: #1f2328; background: #fff; border: 1px solid #d0d7de; border-radius: 8px; padding: 1rem; }
+    .proj-list { display: flex; flex-direction: column; gap: .5rem; }
+    .proj-card { background: #fff; border: 1px solid #d0d7de; border-radius: 8px; padding: .75rem 1rem; }
+    .proj-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: .3rem; }
+    .proj-name { font-weight: 600; color: #0969da; }
+    .proj-count { font-size: .75rem; color: #57606a; }
+    .proj-desc { font-size: .85rem; color: #57606a; line-height: 1.5; }
+    .insight-item { background: #fff; border: 1px solid #d0d7de; border-radius: 8px; padding: .75rem 1rem; margin-bottom: .5rem; font-size: .875rem; line-height: 1.6; }
+    .insight-strength { border-left: 3px solid #1a7f37; }
+    .insight-friction  { border-left: 3px solid #cf222e; }
+    .insight-item strong { display: block; margin-bottom: .25rem; }
+    .example-list { margin: .5rem 0 0 1rem; font-size: .8rem; color: #57606a; }
+    .muted { color: #57606a; font-size: .9rem; padding: 2rem 0; }
+    .tod-card canvas { margin-top: .5rem; width: 100%; }
   </style>
 </head>
 <body>
   <nav>
     <h1 id="nav-title"></h1>
+    <button onclick="showTab('summary')" id="tab-summary">Summary</button>
     <button onclick="showTab('trends')" id="tab-trends">Trends</button>
     <button onclick="showTab('fingerprint')" id="tab-fingerprint">Fingerprint</button>
     <button onclick="showTab('timeline')" id="tab-timeline">Timeline</button>
     <button onclick="showTab('cards')" id="tab-cards">Sessions</button>
   </nav>
+  <div id="panel-summary" class="panel"></div>
   <div id="panel-trends" class="panel"><div id="trends-grid" class="grid2"></div></div>
   <div id="panel-fingerprint" class="panel"><div class="fp-layout"><canvas id="radar-canvas" width="400" height="340"></canvas><ul id="fp-descriptions" class="fp-desc"></ul></div></div>
   <div id="panel-timeline" class="panel"><div id="timeline-rows"></div></div>
@@ -95,7 +124,7 @@ export function saveAndOpenReport(report: InsightReport): string {
   const fingerprint = computeFingerprint([...historyBefore, entry])
   const trends = computeTrends([...historyBefore, entry])
 
-  const data: InsightsData = { current: entry, history: historyBefore, fingerprint, trends }
+  const data: InsightsData = { current: entry, history: historyBefore, fingerprint, trends, summary: report }
   const html = renderReport(data)
 
   const timestamp = runAt.replace(/[:.]/g, '-').slice(0, 23)
