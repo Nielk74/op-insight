@@ -12819,102 +12819,154 @@ var SPA_SCRIPT = `
     return String(v);
   }
 
+  function copyText(id, btn) {
+    var el = document.getElementById(id);
+    if (!el) return;
+    navigator.clipboard.writeText(el.textContent || '').then(function() {
+      btn.textContent = 'Copied!';
+      setTimeout(function() { btn.textContent = 'Copy'; }, 2000);
+    }).catch(function() {
+      var r = document.createRange(); r.selectNodeContents(el);
+      var sel = window.getSelection(); if (sel) { sel.removeAllRanges(); sel.addRange(r); }
+    });
+  }
+  window.copyText = copyText;
+
   function renderSummary() {
     var s = data.summary;
     var container = document.getElementById('panel-summary');
-    if (!s) {
-      container.innerHTML = '<p class="muted">No LLM summary available. Re-generate the report to populate this panel.</p>';
-      return;
-    }
-
     var sessions = data.current.sessions;
     var totalMsgs = sessions.reduce(function(a, b) { return a + b.messageCount; }, 0);
     var avgTurns = sessions.length ? (sessions.reduce(function(a,b){return a+b.turnDepth;},0)/sessions.length).toFixed(1) : '0';
 
-    var glance = s.atAGlance || {};
-    var wf = s.workflowInsights || {};
-    var strengths = wf.strengths || [];
-    var frictions = wf.frictionPoints || [];
-    var projects = s.projects || [];
-    var featRecs = s.featureRecommendations || [];
+    var parts = [];
 
-    // Computed fallbacks when LLM left fields empty
-    if (!toStr(glance.workingWell)) {
-      var topTools = sessions.flatMap(function(x){return x.toolsUsed||[];});
-      var toolCounts = {};
-      topTools.forEach(function(t){ toolCounts[t] = (toolCounts[t]||0)+1; });
-      var sorted = Object.entries(toolCounts).sort(function(a,b){return b[1]-a[1];}).slice(0,3).map(function(e){return e[0];});
-      glance.workingWell = sorted.length ? 'Most-used tools: ' + sorted.join(', ') + '.' : 'No tool data available.';
-    }
-    if (!toStr(glance.hindering)) {
-      var wastySessions = sessions.filter(function(x){return (x.wasteScore||0)>=3;});
-      var errSessions = sessions.filter(function(x){return (x.errorSnippets||[]).length>0;});
-      if (wastySessions.length) {
-        glance.hindering = wastySessions.length + ' session(s) had high waste scores (repeated tool retries).';
-      } else if (errSessions.length) {
-        glance.hindering = errSessions.length + ' session(s) had tool errors.';
-      } else {
-        glance.hindering = 'No significant friction detected in this period.';
-      }
-    }
-    if (!toStr(glance.quickWins)) {
-      var avgWasteNum = sessions.length ? sessions.reduce(function(a,b){return a+(b.wasteScore||0);},0)/sessions.length : 0;
-      if (avgWasteNum > 2) {
-        glance.quickWins = 'Avg waste score is ' + avgWasteNum.toFixed(1) + '/10 \u2014 review sessions with repeated tool errors.';
-      } else {
-        var noFiles = sessions.filter(function(x){return (x.filesTouched||[]).length===0;}).length;
-        glance.quickWins = noFiles > 0 ? noFiles + ' session(s) touched no files \u2014 may be exploratory or stuck.' : 'Waste score is low \u2014 workflow looks clean.';
-      }
-    }
-
-    container.innerHTML =
+    // \u2500\u2500 Stats bar \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+    parts.push(
       '<div class="stats-bar">' +
         '<div class="stat"><div class="stat-val">' + sessions.length + '</div><div class="stat-lbl">Sessions</div></div>' +
         '<div class="stat"><div class="stat-val">' + totalMsgs + '</div><div class="stat-lbl">Messages</div></div>' +
         '<div class="stat"><div class="stat-val">' + avgTurns + '</div><div class="stat-lbl">Avg turns</div></div>' +
         '<div class="stat"><div class="stat-val">' + data.current.periodDays + 'd</div><div class="stat-lbl">Period</div></div>' +
-      '</div>' +
+      '</div>'
+    );
 
+    if (!s) {
+      parts.push('<p class="muted">No LLM summary available. Re-generate the report to populate this panel.</p>');
+      container.innerHTML = parts.join('');
+      return;
+    }
+
+    // \u2500\u2500 At a Glance \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+    var glance = s.atAGlance || {};
+    // Computed fallbacks when LLM left fields empty
+    if (!toStr(glance.workingWell)) {
+      var tc = {}; sessions.flatMap(function(x){return x.toolsUsed||[];}).forEach(function(t){ tc[t]=(tc[t]||0)+1; });
+      var st = Object.entries(tc).sort(function(a,b){return b[1]-a[1];}).slice(0,3).map(function(e){return e[0];});
+      glance.workingWell = st.length ? 'Most-used tools: ' + st.join(', ') + '.' : 'No tool data available.';
+    }
+    if (!toStr(glance.hindering)) {
+      var ws = sessions.filter(function(x){return (x.wasteScore||0)>=3;});
+      glance.hindering = ws.length ? ws.length + ' session(s) had high waste scores (repeated tool retries).' : 'No significant friction detected.';
+    }
+    if (!toStr(glance.quickWins)) {
+      glance.quickWins = 'Add an AGENTS.md at your repo root and set "instructions" in opencode.json to load it automatically.';
+    }
+    parts.push(
       '<div class="summary-section"><h2 class="section-title">At a Glance</h2>' +
         '<div class="glance-grid">' +
-          '<div class="glance-card glance-good"><div class="glance-label">\u2705 Working well</div><p>' + esc(toStr(glance.workingWell)) + '</p></div>' +
-          '<div class="glance-card glance-bad"><div class="glance-label">\u26A0\uFE0F Hindering</div><p>' + esc(toStr(glance.hindering)) + '</p></div>' +
-          '<div class="glance-card glance-tip"><div class="glance-label">\u26A1 Quick wins</div><p>' + esc(toStr(glance.quickWins)) + '</p></div>' +
+          '<div class="glance-card glance-good"><div class="glance-label">\u2705 What\u2019s working</div><p>' + esc(toStr(glance.workingWell)) + '</p></div>' +
+          '<div class="glance-card glance-bad"><div class="glance-label">\u26A0\uFE0F What\u2019s hindering you</div><p>' + esc(toStr(glance.hindering)) + '</p></div>' +
+          '<div class="glance-card glance-tip"><div class="glance-label">\u26A1 Quick wins to try</div><p>' + esc(toStr(glance.quickWins)) + '</p></div>' +
         '</div>' +
-      '</div>' +
+      '</div>'
+    );
 
-      (s.behavioralProfile ? '<div class="summary-section"><h2 class="section-title">How You Use opencode</h2><p class="profile-text">' + esc(toStr(s.behavioralProfile)) + '</p></div>' : '') +
+    // \u2500\u2500 Behavioral profile \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+    if (toStr(s.behavioralProfile)) {
+      parts.push(
+        '<div class="summary-section"><h2 class="section-title">How You Use opencode</h2>' +
+          '<p class="profile-text">' + esc(toStr(s.behavioralProfile)) + '</p>' +
+        '</div>'
+      );
+    }
 
-      (projects.length ? '<div class="summary-section"><h2 class="section-title">Projects</h2><div class="proj-list">' +
-        projects.map(function(p) {
-          var count = p.sessionCount ?? p.sessions ?? '';
-          return '<div class="proj-card"><div class="proj-header"><span class="proj-name">' + esc(p.name || 'Unknown') + '</span>' +
-            (count !== '' ? '<span class="proj-count">' + count + ' sessions</span>' : '') + '</div>' +
-            '<p class="proj-desc">' + esc(toStr(p.description || p.toolUsage)) + '</p></div>';
-        }).join('') + '</div></div>' : '') +
+    // \u2500\u2500 Impressive things \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+    var impressive = s.impressiveThings || [];
+    if (impressive.length) {
+      parts.push('<div class="summary-section"><h2 class="section-title">Impressive Things You Did</h2><div class="rich-grid">');
+      impressive.forEach(function(item) {
+        var title = toStr(item.title || item.name || '');
+        var para  = toStr(item.paragraph || item.detail || item.description || '');
+        parts.push(
+          '<div class="rich-card rich-card-good">' +
+            (title ? '<h3 class="rich-card-title">' + esc(title) + '</h3>' : '') +
+            (para  ? '<p>' + esc(para) + '</p>' : '') +
+          '</div>'
+        );
+      });
+      parts.push('</div></div>');
+    }
 
-      (strengths.length ? '<div class="summary-section"><h2 class="section-title">Strengths</h2>' +
-        strengths.map(function(x) {
-          var title = typeof x === 'string' ? x : (x.title || '');
-          var detail = typeof x === 'string' ? '' : (x.detail || '');
-          return '<div class="insight-item insight-strength"><strong>' + esc(title) + '</strong>' + (detail ? '<p>' + esc(detail) + '</p>' : '') + '</div>';
-        }).join('') + '</div>' : '') +
+    // \u2500\u2500 Where things go wrong \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+    var wrong = s.whereThingsGoWrong || [];
+    // fallback: migrate legacy frictionPoints
+    if (!wrong.length && s.workflowInsights && s.workflowInsights.frictionPoints) {
+      wrong = s.workflowInsights.frictionPoints.map(function(fp) {
+        return { title: fp.title, paragraph: fp.detail, examples: fp.examples || [] };
+      });
+    }
+    if (wrong.length) {
+      parts.push('<div class="summary-section"><h2 class="section-title">Where Things Go Wrong</h2><div class="rich-grid">');
+      wrong.forEach(function(item) {
+        var title = toStr(item.title || '');
+        var para  = toStr(item.paragraph || item.detail || '');
+        var exs   = Array.isArray(item.examples) ? item.examples : [];
+        parts.push(
+          '<div class="rich-card rich-card-bad">' +
+            (title ? '<h3 class="rich-card-title">' + esc(title) + '</h3>' : '') +
+            (para  ? '<p>' + esc(para) + '</p>' : '') +
+            (exs.length ? '<ul class="rich-examples">' + exs.map(function(e){ return '<li>' + esc(toStr(e)) + '</li>'; }).join('') + '</ul>' : '') +
+          '</div>'
+        );
+      });
+      parts.push('</div></div>');
+    }
 
-      (frictions.length ? '<div class="summary-section"><h2 class="section-title">Friction Points</h2>' +
-        frictions.map(function(x) {
-          var title = typeof x === 'string' ? x : (x.title || '');
-          var detail = typeof x === 'string' ? '' : (x.detail || '');
-          var examples = Array.isArray(x.examples) ? x.examples.map(function(e) { return '<li>' + esc(e) + '</li>'; }).join('') : '';
-          return '<div class="insight-item insight-friction"><strong>' + esc(title) + '</strong>' + (detail ? '<p>' + esc(detail) + '</p>' : '') +
-            (examples ? '<ul class="example-list">' + examples + '</ul>' : '') + '</div>';
-        }).join('') + '</div>' : '') +
+    // \u2500\u2500 Features to try \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+    var features = s.featuresToTry || [];
+    // fallback: migrate legacy featureRecommendations
+    if (!features.length && s.featureRecommendations) {
+      features = s.featureRecommendations.map(function(r) {
+        return { title: r.title || '', why: r.why || '', pasteInto: '', target: '' };
+      });
+    }
+    if (features.length) {
+      parts.push('<div class="summary-section"><h2 class="section-title">Features & Practices to Try</h2><div class="feature-list">');
+      features.forEach(function(feat, idx) {
+        var pasteId = 'paste-feat-' + idx;
+        var title  = toStr(feat.title || '');
+        var why    = toStr(feat.why || '');
+        var paste  = toStr(feat.pasteInto || '');
+        var target = toStr(feat.target || 'Copy');
+        parts.push('<div class="feature-card">');
+        if (title) parts.push('<h3 class="rich-card-title">' + esc(title) + '</h3>');
+        if (why)   parts.push('<p class="feature-why">' + esc(why) + '</p>');
+        if (paste) {
+          parts.push(
+            '<div class="feature-paste-header">' +
+              '<span class="feature-paste-label">' + esc(target) + '</span>' +
+              '<button class="copy-btn" data-paste-id="' + pasteId + '" onclick="copyText(this.dataset.pasteId, this)">Copy</button>' +
+            '</div>' +
+            '<pre class="feature-paste-block" id="' + pasteId + '">' + esc(paste) + '</pre>'
+          );
+        }
+        parts.push('</div>');
+      });
+      parts.push('</div></div>');
+    }
 
-      (featRecs.length ? '<div class="summary-section"><h2 class="section-title">Feature Recommendations</h2>' +
-        featRecs.map(function(r) {
-          var title = typeof r === 'string' ? r : (r.title || r.feature || '');
-          var why = typeof r === 'string' ? '' : (r.why || r.benefit || '');
-          return '<div class="insight-item"><strong>' + esc(title) + '</strong>' + (why ? '<p>' + esc(why) + '</p>' : '') + '</div>';
-        }).join('') + '</div>' : '');
+    container.innerHTML = parts.join('');
   }
 
   // \u2500\u2500 Trends Panel \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
@@ -13246,6 +13298,21 @@ function renderReport(data) {
     .example-list { margin: .5rem 0 0 1rem; font-size: .8rem; color: #57606a; }
     .muted { color: #57606a; font-size: .9rem; padding: 2rem 0; }
     .tod-card canvas { margin-top: .5rem; width: 100%; }
+    .rich-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: .75rem; }
+    .rich-card { background: #fff; border: 1px solid #d0d7de; border-radius: 8px; padding: 1rem; font-size: .875rem; line-height: 1.6; }
+    .rich-card-good { border-left: 4px solid #1a7f37; }
+    .rich-card-bad  { border-left: 4px solid #cf222e; }
+    .rich-card-title { font-size: .9rem; font-weight: 700; color: #1f2328; margin: 0 0 .5rem 0; }
+    .rich-examples { margin: .5rem 0 0 1.1rem; font-size: .8rem; color: #57606a; line-height: 1.5; }
+    .feature-list { display: flex; flex-direction: column; gap: .75rem; }
+    .feature-card { background: #fff; border: 1px solid #d0d7de; border-radius: 8px; padding: 1rem; font-size: .875rem; }
+    .feature-card h3 { font-size: .9rem; font-weight: 700; color: #0969da; margin: 0 0 .4rem 0; }
+    .feature-why { font-size: .85rem; color: #57606a; margin: 0 0 .6rem 0; line-height: 1.5; }
+    .feature-paste-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: .25rem; }
+    .feature-paste-label { font-size: .75rem; font-weight: 600; color: #57606a; text-transform: uppercase; letter-spacing: .04em; }
+    .feature-paste-block { background: #f6f8fa; border: 1px solid #d0d7de; border-radius: 6px; padding: .6rem .8rem; font-size: .8rem; font-family: ui-monospace,monospace; white-space: pre-wrap; word-break: break-all; margin: 0; color: #1f2328; }
+    .copy-btn { font-size: .75rem; padding: .2rem .5rem; border: 1px solid #d0d7de; border-radius: 4px; background: #f6f8fa; cursor: pointer; color: #57606a; }
+    .copy-btn:hover { background: #eaeef2; }
   </style>
 </head>
 <body>
@@ -13306,6 +13373,7 @@ function parseJSON(text, fallback) {
   try {
     return JSON.parse(cleaned);
   } catch {
+    console.warn("[insights] JSON parse failed, using fallback. Raw:", text.slice(0, 200));
     return fallback;
   }
 }
@@ -13317,41 +13385,103 @@ async function llmCall(client, sessionId, prompt) {
   if (!res.data) throw new Error("No response from LLM");
   return extractText(res.data.parts);
 }
-async function synthesizeAtAGlance(client, facets, days, directory) {
-  const fallback = { workingWell: "", hindering: "", quickWins: "" };
-  if (facets.length === 0) return fallback;
+async function synthesizeSummary(client, facets, days, directory) {
+  if (facets.length === 0) return null;
   const sessRes = await client.session.create({ query: { directory } });
-  if (!sessRes.data) return fallback;
+  if (!sessRes.data) return null;
   const sessionId = sessRes.data.id;
   try {
-    const sessionLines = facets.slice(0, 60).map(
-      (f, i) => `[${i + 1}] ${f.date} | turns:${f.turnDepth} | waste:${f.wasteScore}/10 | tools:${f.toolsUsed.slice(0, 5).join(",")} | files:${f.filesTouched.length} | errors:${f.errorSnippets.length} | "${f.firstUserMessage.slice(0, 120)}"`
-    ).join("\n");
-    const summarizerPrompt = `You are analyzing opencode AI coding sessions. For each session below, write ONE sentence describing what the user was trying to accomplish and whether it succeeded or hit friction. Be concrete \u2014 mention the tools used and what went wrong if anything.
+    const sessionLines = facets.slice(0, 60).map((f, i) => {
+      const tools = f.toolsUsed.slice(0, 6).join(",");
+      const err = f.errorSnippets[0]?.slice(0, 80) ?? "none";
+      return `[${i + 1}] ${f.date} | turns:${f.turnDepth} | waste:${f.wasteScore}/10 | tools:${tools} | files:${f.filesTouched.length} | first_error:"${err}" | goal:"${f.firstUserMessage.slice(0, 120)}"`;
+    }).join("\n");
+    const summarizerPrompt = `You are analyzing opencode AI coding sessions. For each session, write ONE sentence: what the user tried to accomplish and whether it succeeded or hit friction. Be concrete \u2014 name tools and errors.
 
 Sessions:
 ${sessionLines}
 
-Respond with a JSON array of strings (one per session, same order). No other text.`;
+Respond with a JSON array of strings, one per session, same order. No other text.`;
     const summariesText = await llmCall(client, sessionId, summarizerPrompt);
-    const summaries = parseJSON(summariesText, []);
-    const summaryLines = (summaries.length > 0 ? summaries : facets.map((f) => f.firstUserMessage.slice(0, 80))).map((s, i) => `[${i + 1}] ${s}`).join("\n");
-    const aggregatorPrompt = `You are a coding workflow analyst. Based on ${facets.length} opencode sessions over the last ${days} days:
+    const summaries = parseJSON(summariesText, facets.map((f) => f.firstUserMessage.slice(0, 100)));
+    const topTools = (() => {
+      const counts = {};
+      facets.forEach((f) => f.toolsUsed.forEach((t) => {
+        counts[t] = (counts[t] ?? 0) + 1;
+      }));
+      return Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 6).map(([t, n]) => `${t}(${n})`).join(", ");
+    })();
+    const errorSessions = facets.filter((f) => f.errorSnippets.length > 0).length;
+    const wastySessions = facets.filter((f) => f.wasteScore >= 3).length;
+    const avgTurns = (facets.reduce((s, f) => s + f.turnDepth, 0) / facets.length).toFixed(1);
+    const summaryLines = summaries.map((s, i) => `[${i + 1}] ${s}`).join("\n");
+    const aggregatorPrompt = `You are an expert coding workflow analyst producing a rich personal insights report for an opencode user.
 
+Stats: ${facets.length} sessions over ${days} days | avg turns/session: ${avgTurns} | sessions with errors: ${errorSessions} | sessions with high waste: ${wastySessions} | top tools: ${topTools}
+
+Session summaries:
 ${summaryLines}
 
-Produce a JSON object with exactly these three fields:
-- "workingWell": 2-3 sentences on patterns that are working well for this user.
-- "hindering": 2-3 sentences on what is blocking or slowing them down.
-- "quickWins": 2-3 sentences of specific, actionable improvements. Always mention: (1) adding project-specific instructions to opencode.json using the "instructions" field (e.g. \`{"instructions": ["CONTRIBUTING.md", "docs/guidelines.md", ".cursor/rules/*.md"]}\`) so the AI has context about the project, and (2) keeping an AGENTS.md or CLAUDE.md at the repo root with coding guidelines.
+Produce a JSON object with EXACTLY these fields. Be specific \u2014 cite real patterns, tool names, error types from the data. Write in second person ("You..."). Keep each paragraph to 2-4 sentences.
 
-Respond with ONLY the JSON object. No markdown, no explanation.`;
-    const glanceText = await llmCall(client, sessionId, aggregatorPrompt);
-    const glance = parseJSON(glanceText, {});
+CRITICAL for featuresToTry: the "pasteInto" fields must contain REAL, FILLED-IN content derived from the session data \u2014 not placeholder text in angle brackets. Replace every <...> with actual content. For the AGENTS.md card, write the actual AGENTS.md file content based on what you inferred about the user's projects, platform, and recurring issues. For the opencode.json card, write the actual "system" instruction text that would address the top friction patterns observed. The third card should be a concrete, specific suggestion (a prompt template, a workflow step, a config snippet) tailored to this user's actual patterns.
+
+{
+  "atAGlance": {
+    "workingWell": "Narrative paragraph. What patterns are consistently working well. Mention specific tools or workflows observed.",
+    "hindering": "Narrative paragraph. What is blocking or slowing the user. Name specific friction patterns with examples.",
+    "quickWins": "Narrative paragraph. 2-3 specific actionable improvements. ALWAYS mention: (1) adding an AGENTS.md or CLAUDE.md at the repo root with project context and coding guidelines so the AI has consistent context, and (2) using the opencode.json \\"instructions\\" field to load project-specific files (e.g. {  \\"instructions\\": [\\"CONTRIBUTING.md\\", \\"docs/guidelines.md\\", \\".cursor/rules/*.md\\"] })."
+  },
+  "behavioralProfile": "3-4 sentence paragraph describing how this user works: their style, ambition level, iteration speed, how they use AI as a tool. Be insightful and specific.",
+  "impressiveThings": [
+    { "title": "Short title", "paragraph": "2-3 sentences about a standout achievement with specific details from the sessions." },
+    { "title": "Short title", "paragraph": "..." },
+    { "title": "Short title", "paragraph": "..." }
+  ],
+  "whereThingsGoWrong": [
+    {
+      "title": "Short friction category title",
+      "paragraph": "2-3 sentences explaining the pattern and its root cause.",
+      "examples": ["Concrete example from the sessions", "Another example"]
+    },
+    { "title": "...", "paragraph": "...", "examples": ["..."] },
+    { "title": "...", "paragraph": "...", "examples": ["..."] }
+  ],
+  "featuresToTry": [
+    {
+      "title": "Add AGENTS.md to your repos",
+      "why": "Based on the session patterns, the AI frequently lacks project context, leading to wrong-file or wrong-approach errors. Fill in the template below with the actual details you observed.",
+      "pasteInto": "# Project Context\\n\\n## What this project does\\n<Fill in 2-3 sentences based on what you observed in the sessions \u2014 actual project names, languages, and purpose>\\n\\n## Key constraints\\n- Platform: <observed platform>\\n- Build: <observed build command>\\n- Test: <observed test command>\\n\\n## Coding guidelines\\n<List 2-4 of the most specific rules that would have prevented the friction patterns you observed \u2014 e.g. 'Always check git status before running git commands', 'Never mock the database in tests'>",
+      "target": "Save as AGENTS.md at repo root"
+    },
+    {
+      "title": "Configure opencode.json instructions",
+      "why": "Loading project-specific files gives the AI consistent context across all sessions without you having to re-explain. Based on the observed friction, here are specific instructions that would help.",
+      "pasteInto": "{\\n  \\"instructions\\": [\\n    \\"AGENTS.md\\"\\n  ],\\n  \\"system\\": \\"<Write 2-4 sentences of standing instructions directly addressing the top friction patterns observed \u2014 e.g. if the user often hits Git directory errors: Always verify we are inside a Git repo before running git commands. If the user frequently re-explains project context: This project is a C++ trading engine; key files are in src/. Never assume a function exists without grepping first.\\"\\n}",
+      "target": "Add to opencode.json"
+    },
+    {
+      "title": "<A third actionable suggestion specific to this user's patterns>",
+      "why": "<Why this is relevant based on observed friction or workflow>",
+      "pasteInto": "<Copy-pasteable prompt, config snippet, or workflow step the user can use immediately \u2014 must be specific to their actual patterns, not generic>",
+      "target": "<Where to paste: 'Paste into opencode', 'Save as AGENTS.md', 'Add to opencode.json', etc.>"
+    }
+  ]
+}
+
+Respond with ONLY the JSON object. No markdown fences, no explanation.`;
+    const aggregateText = await llmCall(client, sessionId, aggregatorPrompt);
+    const result = parseJSON(aggregateText, {});
     return {
-      workingWell: glance.workingWell ?? "",
-      hindering: glance.hindering ?? "",
-      quickWins: glance.quickWins ?? ""
+      atAGlance: {
+        workingWell: result.atAGlance?.workingWell ?? "",
+        hindering: result.atAGlance?.hindering ?? "",
+        quickWins: result.atAGlance?.quickWins ?? ""
+      },
+      behavioralProfile: result.behavioralProfile ?? "",
+      impressiveThings: result.impressiveThings ?? [],
+      whereThingsGoWrong: result.whereThingsGoWrong ?? [],
+      featuresToTry: result.featuresToTry ?? []
     };
   } finally {
     await client.session.delete({ path: { id: sessionId } }).catch(() => {
@@ -13371,13 +13501,18 @@ When the user's message starts with /insights (or a close variant like "run insi
    - --topic <keyword> = filter by keyword
    - --errors = errors_only mode
 2. Call insights_get_data with those parameters.
-3. Synthesize the returned data into a complete InsightReport JSON. CRITICAL rules:
-   - The response from insights_get_data already includes a pre-computed "atAGlance" field \u2014 copy it EXACTLY into the report as-is. Do NOT rewrite or replace it.
-   - Use the EXACT sessionCount from the data (the "sessionCount" field in the response). Never invent a different number.
-   - Use ONLY tool names, error snippets, file paths, and dates that actually appear in the session data. Do not invent project names, session counts, or tool usage counts.
-   - generatedAt must be today's ISO timestamp.
-   - All fields are required: generatedAt, periodDays, sessionCount, atAGlance, behavioralProfile, projects, topTools, workflowInsights (strengths, frictionPoints with examples), codeQualityInsights, opencodeConfigSuggestions, featureRecommendations.
-   - Write in second person. Be specific \u2014 cite real tool names and error patterns from the data.
+3. Build the InsightReport JSON to pass to insights_save_report. CRITICAL: insights_get_data already returns pre-computed fields \u2014 DO NOT rewrite or replace them. Just assemble the JSON like this:
+   {
+     "generatedAt": "<today ISO timestamp>",
+     "periodDays": <copy periodDays from response>,
+     "sessionCount": <copy sessionCount from response \u2014 NEVER change this number>,
+     "atAGlance": <copy atAGlance object EXACTLY from response>,
+     "behavioralProfile": <copy behavioralProfile string EXACTLY from response>,
+     "impressiveThings": <copy impressiveThings array EXACTLY from response>,
+     "whereThingsGoWrong": <copy whereThingsGoWrong array EXACTLY from response>,
+     "featuresToTry": <copy featuresToTry array EXACTLY from response>
+   }
+   If any field is missing from the response, use an empty string or empty array \u2014 do NOT invent content.
 4. Call insights_save_report with that JSON.
 Do all four steps automatically in sequence.`;
 var InsightsPlugin = async (input) => {
@@ -13412,15 +13547,19 @@ var InsightsPlugin = async (input) => {
             savePending(getInsightsDir(), facets, args.days);
           } catch (_) {
           }
-          let atAGlance;
+          let synthesis = null;
           try {
-            atAGlance = await synthesizeAtAGlance(client, facets, args.days, directory);
+            synthesis = await synthesizeSummary(client, facets, args.days, directory);
           } catch (_) {
           }
           return JSON.stringify({
             periodDays: args.days,
             sessionCount: facets.length,
-            atAGlance,
+            atAGlance: synthesis?.atAGlance,
+            behavioralProfile: synthesis?.behavioralProfile,
+            impressiveThings: synthesis?.impressiveThings,
+            whereThingsGoWrong: synthesis?.whereThingsGoWrong,
+            featuresToTry: synthesis?.featuresToTry,
             sessions: facets
           }, null, 2);
         }
@@ -13440,6 +13579,13 @@ var InsightsPlugin = async (input) => {
               hindering: ag.hindering ?? ag.friction ?? ag.challenges ?? ag.bad ?? ag.highFrictionPoints ?? "",
               quickWins: ag.quickWins ?? ag.quick_wins ?? ag.wins ?? ag.tips ?? ag.userBehaviors ?? ""
             };
+            if (!raw.featuresToTry && raw.featureRecommendations) {
+              raw.featuresToTry = raw.featureRecommendations.map((r) => ({ title: r.title ?? "", why: r.why ?? "", pasteInto: "", target: "" }));
+            }
+            const wf = raw.workflowInsights;
+            if (!raw.whereThingsGoWrong && wf?.frictionPoints) {
+              raw.whereThingsGoWrong = wf.frictionPoints.map((fp) => ({ title: fp.title, paragraph: fp.detail, examples: fp.examples ?? [] }));
+            }
             report = raw;
           } catch (e) {
             return `Error: report_json is not valid JSON: ${e}`;

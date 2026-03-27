@@ -87,6 +87,21 @@ export function renderReport(data: InsightsData): string {
     .example-list { margin: .5rem 0 0 1rem; font-size: .8rem; color: #57606a; }
     .muted { color: #57606a; font-size: .9rem; padding: 2rem 0; }
     .tod-card canvas { margin-top: .5rem; width: 100%; }
+    .rich-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: .75rem; }
+    .rich-card { background: #fff; border: 1px solid #d0d7de; border-radius: 8px; padding: 1rem; font-size: .875rem; line-height: 1.6; }
+    .rich-card-good { border-left: 4px solid #1a7f37; }
+    .rich-card-bad  { border-left: 4px solid #cf222e; }
+    .rich-card-title { font-size: .9rem; font-weight: 700; color: #1f2328; margin: 0 0 .5rem 0; }
+    .rich-examples { margin: .5rem 0 0 1.1rem; font-size: .8rem; color: #57606a; line-height: 1.5; }
+    .feature-list { display: flex; flex-direction: column; gap: .75rem; }
+    .feature-card { background: #fff; border: 1px solid #d0d7de; border-radius: 8px; padding: 1rem; font-size: .875rem; }
+    .feature-card h3 { font-size: .9rem; font-weight: 700; color: #0969da; margin: 0 0 .4rem 0; }
+    .feature-why { font-size: .85rem; color: #57606a; margin: 0 0 .6rem 0; line-height: 1.5; }
+    .feature-paste-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: .25rem; }
+    .feature-paste-label { font-size: .75rem; font-weight: 600; color: #57606a; text-transform: uppercase; letter-spacing: .04em; }
+    .feature-paste-block { background: #f6f8fa; border: 1px solid #d0d7de; border-radius: 6px; padding: .6rem .8rem; font-size: .8rem; font-family: ui-monospace,monospace; white-space: pre-wrap; word-break: break-all; margin: 0; color: #1f2328; }
+    .copy-btn { font-size: .75rem; padding: .2rem .5rem; border: 1px solid #d0d7de; border-radius: 4px; background: #f6f8fa; cursor: pointer; color: #57606a; }
+    .copy-btn:hover { background: #eaeef2; }
   </style>
 </head>
 <body>

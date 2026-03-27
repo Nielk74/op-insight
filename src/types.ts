@@ -19,28 +19,30 @@ export type InsightReport = {
   periodDays: number
   sessionCount: number
   atAGlance: {
-    workingWell: string
-    hindering: string
-    quickWins: string
+    workingWell: string   // narrative paragraph, specific examples
+    hindering: string     // narrative paragraph, specific examples
+    quickWins: string     // actionable, mentions opencode.json instructions + AGENTS.md
   }
-  behavioralProfile: string
-  projects: Array<{
-    name: string
-    sessionCount: number
-    description: string
+  behavioralProfile: string  // long narrative: how the user works, patterns, style
+  impressiveThings: Array<{
+    title: string
+    paragraph: string     // 2-3 sentences with specific examples from the data
   }>
-  topTools: Array<{ name: string; count: number }>
-  workflowInsights: {
-    strengths: Array<{ title: string; detail: string }>
-    frictionPoints: Array<{ title: string; detail: string; examples: string[] }>
-    behavioralProfile: string
-  }
-  codeQualityInsights: {
-    recurringPatterns: string[]
-    recommendations: string[]
-  }
-  opencodeConfigSuggestions: ConfigSuggestion[]
-  featureRecommendations: Array<{ title: string; why: string }>
+  whereThingsGoWrong: Array<{
+    title: string
+    paragraph: string     // explanation + root cause
+    examples: string[]    // 2-3 concrete examples from actual sessions
+  }>
+  featuresToTry: Array<{
+    title: string
+    why: string           // why this is relevant for this specific user
+    pasteInto: string     // copy-pasteable prompt/config the user can use directly
+    target: string        // e.g. "Paste into opencode", "Add to AGENTS.md", "Add to opencode.json"
+  }>
+  // Legacy fields kept for backwards compat
+  projects?: Array<{ name: string; sessionCount: number; description: string }>
+  topTools?: Array<{ name: string; count: number }>
+  opencodeConfigSuggestions?: ConfigSuggestion[]
 }
 
 // Extended per-session facet with richer metrics

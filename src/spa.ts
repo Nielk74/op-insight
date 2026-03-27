@@ -128,102 +128,154 @@ export const SPA_SCRIPT = `
     return String(v);
   }
 
+  function copyText(id, btn) {
+    var el = document.getElementById(id);
+    if (!el) return;
+    navigator.clipboard.writeText(el.textContent || '').then(function() {
+      btn.textContent = 'Copied!';
+      setTimeout(function() { btn.textContent = 'Copy'; }, 2000);
+    }).catch(function() {
+      var r = document.createRange(); r.selectNodeContents(el);
+      var sel = window.getSelection(); if (sel) { sel.removeAllRanges(); sel.addRange(r); }
+    });
+  }
+  window.copyText = copyText;
+
   function renderSummary() {
     var s = data.summary;
     var container = document.getElementById('panel-summary');
-    if (!s) {
-      container.innerHTML = '<p class="muted">No LLM summary available. Re-generate the report to populate this panel.</p>';
-      return;
-    }
-
     var sessions = data.current.sessions;
     var totalMsgs = sessions.reduce(function(a, b) { return a + b.messageCount; }, 0);
     var avgTurns = sessions.length ? (sessions.reduce(function(a,b){return a+b.turnDepth;},0)/sessions.length).toFixed(1) : '0';
 
-    var glance = s.atAGlance || {};
-    var wf = s.workflowInsights || {};
-    var strengths = wf.strengths || [];
-    var frictions = wf.frictionPoints || [];
-    var projects = s.projects || [];
-    var featRecs = s.featureRecommendations || [];
+    var parts = [];
 
-    // Computed fallbacks when LLM left fields empty
-    if (!toStr(glance.workingWell)) {
-      var topTools = sessions.flatMap(function(x){return x.toolsUsed||[];});
-      var toolCounts = {};
-      topTools.forEach(function(t){ toolCounts[t] = (toolCounts[t]||0)+1; });
-      var sorted = Object.entries(toolCounts).sort(function(a,b){return b[1]-a[1];}).slice(0,3).map(function(e){return e[0];});
-      glance.workingWell = sorted.length ? 'Most-used tools: ' + sorted.join(', ') + '.' : 'No tool data available.';
-    }
-    if (!toStr(glance.hindering)) {
-      var wastySessions = sessions.filter(function(x){return (x.wasteScore||0)>=3;});
-      var errSessions = sessions.filter(function(x){return (x.errorSnippets||[]).length>0;});
-      if (wastySessions.length) {
-        glance.hindering = wastySessions.length + ' session(s) had high waste scores (repeated tool retries).';
-      } else if (errSessions.length) {
-        glance.hindering = errSessions.length + ' session(s) had tool errors.';
-      } else {
-        glance.hindering = 'No significant friction detected in this period.';
-      }
-    }
-    if (!toStr(glance.quickWins)) {
-      var avgWasteNum = sessions.length ? sessions.reduce(function(a,b){return a+(b.wasteScore||0);},0)/sessions.length : 0;
-      if (avgWasteNum > 2) {
-        glance.quickWins = 'Avg waste score is ' + avgWasteNum.toFixed(1) + '/10 — review sessions with repeated tool errors.';
-      } else {
-        var noFiles = sessions.filter(function(x){return (x.filesTouched||[]).length===0;}).length;
-        glance.quickWins = noFiles > 0 ? noFiles + ' session(s) touched no files — may be exploratory or stuck.' : 'Waste score is low — workflow looks clean.';
-      }
-    }
-
-    container.innerHTML =
+    // ── Stats bar ────────────────────────────────────────────────────
+    parts.push(
       '<div class="stats-bar">' +
         '<div class="stat"><div class="stat-val">' + sessions.length + '</div><div class="stat-lbl">Sessions</div></div>' +
         '<div class="stat"><div class="stat-val">' + totalMsgs + '</div><div class="stat-lbl">Messages</div></div>' +
         '<div class="stat"><div class="stat-val">' + avgTurns + '</div><div class="stat-lbl">Avg turns</div></div>' +
         '<div class="stat"><div class="stat-val">' + data.current.periodDays + 'd</div><div class="stat-lbl">Period</div></div>' +
-      '</div>' +
+      '</div>'
+    );
 
+    if (!s) {
+      parts.push('<p class="muted">No LLM summary available. Re-generate the report to populate this panel.</p>');
+      container.innerHTML = parts.join('');
+      return;
+    }
+
+    // ── At a Glance ──────────────────────────────────────────────────
+    var glance = s.atAGlance || {};
+    // Computed fallbacks when LLM left fields empty
+    if (!toStr(glance.workingWell)) {
+      var tc = {}; sessions.flatMap(function(x){return x.toolsUsed||[];}).forEach(function(t){ tc[t]=(tc[t]||0)+1; });
+      var st = Object.entries(tc).sort(function(a,b){return b[1]-a[1];}).slice(0,3).map(function(e){return e[0];});
+      glance.workingWell = st.length ? 'Most-used tools: ' + st.join(', ') + '.' : 'No tool data available.';
+    }
+    if (!toStr(glance.hindering)) {
+      var ws = sessions.filter(function(x){return (x.wasteScore||0)>=3;});
+      glance.hindering = ws.length ? ws.length + ' session(s) had high waste scores (repeated tool retries).' : 'No significant friction detected.';
+    }
+    if (!toStr(glance.quickWins)) {
+      glance.quickWins = 'Add an AGENTS.md at your repo root and set "instructions" in opencode.json to load it automatically.';
+    }
+    parts.push(
       '<div class="summary-section"><h2 class="section-title">At a Glance</h2>' +
         '<div class="glance-grid">' +
-          '<div class="glance-card glance-good"><div class="glance-label">\u2705 Working well</div><p>' + esc(toStr(glance.workingWell)) + '</p></div>' +
-          '<div class="glance-card glance-bad"><div class="glance-label">\u26a0\ufe0f Hindering</div><p>' + esc(toStr(glance.hindering)) + '</p></div>' +
-          '<div class="glance-card glance-tip"><div class="glance-label">\u26a1 Quick wins</div><p>' + esc(toStr(glance.quickWins)) + '</p></div>' +
+          '<div class="glance-card glance-good"><div class="glance-label">\u2705 What\u2019s working</div><p>' + esc(toStr(glance.workingWell)) + '</p></div>' +
+          '<div class="glance-card glance-bad"><div class="glance-label">\u26a0\ufe0f What\u2019s hindering you</div><p>' + esc(toStr(glance.hindering)) + '</p></div>' +
+          '<div class="glance-card glance-tip"><div class="glance-label">\u26a1 Quick wins to try</div><p>' + esc(toStr(glance.quickWins)) + '</p></div>' +
         '</div>' +
-      '</div>' +
+      '</div>'
+    );
 
-      (s.behavioralProfile ? '<div class="summary-section"><h2 class="section-title">How You Use opencode</h2><p class="profile-text">' + esc(toStr(s.behavioralProfile)) + '</p></div>' : '') +
+    // ── Behavioral profile ───────────────────────────────────────────
+    if (toStr(s.behavioralProfile)) {
+      parts.push(
+        '<div class="summary-section"><h2 class="section-title">How You Use opencode</h2>' +
+          '<p class="profile-text">' + esc(toStr(s.behavioralProfile)) + '</p>' +
+        '</div>'
+      );
+    }
 
-      (projects.length ? '<div class="summary-section"><h2 class="section-title">Projects</h2><div class="proj-list">' +
-        projects.map(function(p) {
-          var count = p.sessionCount ?? p.sessions ?? '';
-          return '<div class="proj-card"><div class="proj-header"><span class="proj-name">' + esc(p.name || 'Unknown') + '</span>' +
-            (count !== '' ? '<span class="proj-count">' + count + ' sessions</span>' : '') + '</div>' +
-            '<p class="proj-desc">' + esc(toStr(p.description || p.toolUsage)) + '</p></div>';
-        }).join('') + '</div></div>' : '') +
+    // ── Impressive things ────────────────────────────────────────────
+    var impressive = s.impressiveThings || [];
+    if (impressive.length) {
+      parts.push('<div class="summary-section"><h2 class="section-title">Impressive Things You Did</h2><div class="rich-grid">');
+      impressive.forEach(function(item) {
+        var title = toStr(item.title || item.name || '');
+        var para  = toStr(item.paragraph || item.detail || item.description || '');
+        parts.push(
+          '<div class="rich-card rich-card-good">' +
+            (title ? '<h3 class="rich-card-title">' + esc(title) + '</h3>' : '') +
+            (para  ? '<p>' + esc(para) + '</p>' : '') +
+          '</div>'
+        );
+      });
+      parts.push('</div></div>');
+    }
 
-      (strengths.length ? '<div class="summary-section"><h2 class="section-title">Strengths</h2>' +
-        strengths.map(function(x) {
-          var title = typeof x === 'string' ? x : (x.title || '');
-          var detail = typeof x === 'string' ? '' : (x.detail || '');
-          return '<div class="insight-item insight-strength"><strong>' + esc(title) + '</strong>' + (detail ? '<p>' + esc(detail) + '</p>' : '') + '</div>';
-        }).join('') + '</div>' : '') +
+    // ── Where things go wrong ────────────────────────────────────────
+    var wrong = s.whereThingsGoWrong || [];
+    // fallback: migrate legacy frictionPoints
+    if (!wrong.length && s.workflowInsights && s.workflowInsights.frictionPoints) {
+      wrong = s.workflowInsights.frictionPoints.map(function(fp) {
+        return { title: fp.title, paragraph: fp.detail, examples: fp.examples || [] };
+      });
+    }
+    if (wrong.length) {
+      parts.push('<div class="summary-section"><h2 class="section-title">Where Things Go Wrong</h2><div class="rich-grid">');
+      wrong.forEach(function(item) {
+        var title = toStr(item.title || '');
+        var para  = toStr(item.paragraph || item.detail || '');
+        var exs   = Array.isArray(item.examples) ? item.examples : [];
+        parts.push(
+          '<div class="rich-card rich-card-bad">' +
+            (title ? '<h3 class="rich-card-title">' + esc(title) + '</h3>' : '') +
+            (para  ? '<p>' + esc(para) + '</p>' : '') +
+            (exs.length ? '<ul class="rich-examples">' + exs.map(function(e){ return '<li>' + esc(toStr(e)) + '</li>'; }).join('') + '</ul>' : '') +
+          '</div>'
+        );
+      });
+      parts.push('</div></div>');
+    }
 
-      (frictions.length ? '<div class="summary-section"><h2 class="section-title">Friction Points</h2>' +
-        frictions.map(function(x) {
-          var title = typeof x === 'string' ? x : (x.title || '');
-          var detail = typeof x === 'string' ? '' : (x.detail || '');
-          var examples = Array.isArray(x.examples) ? x.examples.map(function(e) { return '<li>' + esc(e) + '</li>'; }).join('') : '';
-          return '<div class="insight-item insight-friction"><strong>' + esc(title) + '</strong>' + (detail ? '<p>' + esc(detail) + '</p>' : '') +
-            (examples ? '<ul class="example-list">' + examples + '</ul>' : '') + '</div>';
-        }).join('') + '</div>' : '') +
+    // ── Features to try ──────────────────────────────────────────────
+    var features = s.featuresToTry || [];
+    // fallback: migrate legacy featureRecommendations
+    if (!features.length && s.featureRecommendations) {
+      features = s.featureRecommendations.map(function(r) {
+        return { title: r.title || '', why: r.why || '', pasteInto: '', target: '' };
+      });
+    }
+    if (features.length) {
+      parts.push('<div class="summary-section"><h2 class="section-title">Features & Practices to Try</h2><div class="feature-list">');
+      features.forEach(function(feat, idx) {
+        var pasteId = 'paste-feat-' + idx;
+        var title  = toStr(feat.title || '');
+        var why    = toStr(feat.why || '');
+        var paste  = toStr(feat.pasteInto || '');
+        var target = toStr(feat.target || 'Copy');
+        parts.push('<div class="feature-card">');
+        if (title) parts.push('<h3 class="rich-card-title">' + esc(title) + '</h3>');
+        if (why)   parts.push('<p class="feature-why">' + esc(why) + '</p>');
+        if (paste) {
+          parts.push(
+            '<div class="feature-paste-header">' +
+              '<span class="feature-paste-label">' + esc(target) + '</span>' +
+              '<button class="copy-btn" data-paste-id="' + pasteId + '" onclick="copyText(this.dataset.pasteId, this)">Copy</button>' +
+            '</div>' +
+            '<pre class="feature-paste-block" id="' + pasteId + '">' + esc(paste) + '</pre>'
+          );
+        }
+        parts.push('</div>');
+      });
+      parts.push('</div></div>');
+    }
 
-      (featRecs.length ? '<div class="summary-section"><h2 class="section-title">Feature Recommendations</h2>' +
-        featRecs.map(function(r) {
-          var title = typeof r === 'string' ? r : (r.title || r.feature || '');
-          var why = typeof r === 'string' ? '' : (r.why || r.benefit || '');
-          return '<div class="insight-item"><strong>' + esc(title) + '</strong>' + (why ? '<p>' + esc(why) + '</p>' : '') + '</div>';
-        }).join('') + '</div>' : '');
+    container.innerHTML = parts.join('');
   }
 
   // ── Trends Panel ────────────────────────────────────────────────

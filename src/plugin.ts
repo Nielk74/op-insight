@@ -4,7 +4,7 @@ import { tool } from '@opencode-ai/plugin'
 import { readSessionFacets } from './reader.js'
 import { saveAndOpenReport, getInsightsDir } from './reporter.js'
 import { savePending, readHistory, deleteFromHistory } from './history.js'
-import { synthesizeAtAGlance } from './synthesize.js'
+import { synthesizeSummary } from './synthesize.js'
 import type { InsightReport } from './types.js'
 
 const REPORT_SCHEMA_DESC = `JSON string with these fields: generatedAt (ISO timestamp), periodDays (number), sessionCount (MUST match the exact count returned by insights_get_data — do not invent a different number), atAGlance ({workingWell, hindering, quickWins}), behavioralProfile (string), projects ([{name, sessionCount, description}]), topTools ([{name, count}] — use ONLY tools that actually appear in the session data), workflowInsights ({strengths:[{title,detail}], frictionPoints:[{title,detail,examples:[]}], behavioralProfile}), codeQualityInsights ({recurringPatterns:[], recommendations:[]}), opencodeConfigSuggestions ([{description, rule}] — always include a suggestion about the "instructions" field in opencode.json for loading project guidelines like CONTRIBUTING.md or .cursor/rules/*.md), featureRecommendations ([{title, why}]). Write in second person. Cite only real tool names and error patterns from the data.`
@@ -19,13 +19,18 @@ When the user's message starts with /insights (or a close variant like "run insi
    - --topic <keyword> = filter by keyword
    - --errors = errors_only mode
 2. Call insights_get_data with those parameters.
-3. Synthesize the returned data into a complete InsightReport JSON. CRITICAL rules:
-   - The response from insights_get_data already includes a pre-computed "atAGlance" field — copy it EXACTLY into the report as-is. Do NOT rewrite or replace it.
-   - Use the EXACT sessionCount from the data (the "sessionCount" field in the response). Never invent a different number.
-   - Use ONLY tool names, error snippets, file paths, and dates that actually appear in the session data. Do not invent project names, session counts, or tool usage counts.
-   - generatedAt must be today's ISO timestamp.
-   - All fields are required: generatedAt, periodDays, sessionCount, atAGlance, behavioralProfile, projects, topTools, workflowInsights (strengths, frictionPoints with examples), codeQualityInsights, opencodeConfigSuggestions, featureRecommendations.
-   - Write in second person. Be specific — cite real tool names and error patterns from the data.
+3. Build the InsightReport JSON to pass to insights_save_report. CRITICAL: insights_get_data already returns pre-computed fields — DO NOT rewrite or replace them. Just assemble the JSON like this:
+   {
+     "generatedAt": "<today ISO timestamp>",
+     "periodDays": <copy periodDays from response>,
+     "sessionCount": <copy sessionCount from response — NEVER change this number>,
+     "atAGlance": <copy atAGlance object EXACTLY from response>,
+     "behavioralProfile": <copy behavioralProfile string EXACTLY from response>,
+     "impressiveThings": <copy impressiveThings array EXACTLY from response>,
+     "whereThingsGoWrong": <copy whereThingsGoWrong array EXACTLY from response>,
+     "featuresToTry": <copy featuresToTry array EXACTLY from response>
+   }
+   If any field is missing from the response, use an empty string or empty array — do NOT invent content.
 4. Call insights_save_report with that JSON.
 Do all four steps automatically in sequence.`
 
@@ -63,10 +68,10 @@ export const InsightsPlugin: Plugin = async (input) => {
             // non-fatal
           }
 
-          // Run two-agent synthesis: per-session summaries → at-a-glance
-          let atAGlance: { workingWell: string; hindering: string; quickWins: string } | undefined
+          // Run two-agent synthesis: per-session summaries → full rich summary
+          let synthesis: Awaited<ReturnType<typeof synthesizeSummary>> = null
           try {
-            atAGlance = await synthesizeAtAGlance(client, facets, args.days, directory)
+            synthesis = await synthesizeSummary(client, facets, args.days, directory)
           } catch (_) {
             // non-fatal — SPA fallback will compute from raw data
           }
@@ -74,7 +79,11 @@ export const InsightsPlugin: Plugin = async (input) => {
           return JSON.stringify({
             periodDays: args.days,
             sessionCount: facets.length,
-            atAGlance,
+            atAGlance:          synthesis?.atAGlance,
+            behavioralProfile:  synthesis?.behavioralProfile,
+            impressiveThings:   synthesis?.impressiveThings,
+            whereThingsGoWrong: synthesis?.whereThingsGoWrong,
+            featuresToTry:      synthesis?.featuresToTry,
             sessions: facets,
           }, null, 2)
         },
@@ -95,6 +104,17 @@ export const InsightsPlugin: Plugin = async (input) => {
               workingWell: ag.workingWell ?? ag.working_well ?? ag.strengths ?? ag.good ?? '',
               hindering:   ag.hindering ?? ag.friction ?? ag.challenges ?? ag.bad ?? ag.highFrictionPoints ?? '',
               quickWins:   ag.quickWins ?? ag.quick_wins ?? ag.wins ?? ag.tips ?? ag.userBehaviors ?? '',
+            }
+            // Migrate old featureRecommendations → featuresToTry
+            if (!raw.featuresToTry && raw.featureRecommendations) {
+              raw.featuresToTry = (raw.featureRecommendations as Array<{title:string;why:string}>)
+                .map(r => ({ title: r.title ?? '', why: r.why ?? '', pasteInto: '', target: '' }))
+            }
+            // Migrate old workflowInsights.frictionPoints → whereThingsGoWrong
+            const wf = raw.workflowInsights as Record<string, unknown> | undefined
+            if (!raw.whereThingsGoWrong && wf?.frictionPoints) {
+              raw.whereThingsGoWrong = (wf.frictionPoints as Array<{title:string;detail:string;examples:string[]}> )
+                .map(fp => ({ title: fp.title, paragraph: fp.detail, examples: fp.examples ?? [] }))
             }
             report = raw as unknown as InsightReport
           } catch (e) {
