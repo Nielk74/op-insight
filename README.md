@@ -1,6 +1,6 @@
 # opencode-insights
 
-A native [opencode](https://opencode.ai) plugin that generates a rich, interactive HTML report from your session history — no extra LLM calls, all analysis runs locally.
+A native [opencode](https://opencode.ai) plugin that generates a rich, interactive HTML report from your session history. Session data is read locally; a two-agent LLM pipeline runs inside the plugin to synthesize the narrative sections.
 
 ## Installation
 
@@ -70,7 +70,7 @@ You can also just say: *"generate my insights report for the last 30 days"*
 
 The generated HTML report opens in your browser with five tabs:
 
-- **Summary** — at-a-glance cards (what's working, what's hindering, quick wins), behavioral profile, project breakdown, workflow strengths and friction points with examples, config suggestions, feature recommendations
+- **Summary** — at-a-glance cards (what's working, what's hindering, quick wins), behavioral profile, impressive things you did, where things go wrong (with concrete examples), and personalized features & practices to try with copy-pasteable AGENTS.md and opencode.json snippets derived from your actual patterns
 - **Trends** — weekly sparklines for sessions, tokens, waste score, tool errors, and a time-of-day usage chart
 - **Fingerprint** — radar chart of your coding style axes (exploration, interruptions, waste, deep work, tool diversity)
 - **Timeline** — dot-plot of sessions per project over the selected time window
@@ -89,5 +89,7 @@ Example: *"list my insights runs"* or *"delete the insights run from 2026-03-20"
 
 The plugin exposes tools the LLM calls automatically:
 
-1. **`insights_get_data`** — reads opencode's SQLite session DB, extracts per-session facets (duration, tools used, files touched, waste score, turn depth, hour of day) — no LLM calls
-2. **`insights_save_report`** — takes the synthesized `InsightReport` JSON, renders the HTML report, saves it to `~/.local/share/opencode/insights/`, and opens it in your browser
+1. **`insights_get_data`** — reads opencode's SQLite session DB, extracts per-session facets (duration, tools used, files touched, waste score, turn depth, hour of day), then runs a two-agent synthesis pipeline:
+   - **Summarizer** — writes one goal-oriented sentence per session
+   - **Aggregator** — produces the full narrative report (at-a-glance, behavioral profile, impressive things, friction patterns, personalized recommendations)
+2. **`insights_save_report`** — takes the `InsightReport` JSON, renders the HTML report, saves it to `~/.local/share/opencode/insights/`, and opens it in your browser
