@@ -91,5 +91,5 @@ The plugin exposes tools the LLM calls automatically:
 
 1. **`insights_get_data`** — reads opencode's SQLite session DB, extracts per-session facets (duration, tools used, files touched, waste score, turn depth, hour of day), then runs a two-agent synthesis pipeline:
    - **Summarizer** — writes one goal-oriented sentence per session
-   - **Aggregator** — produces the full narrative report (at-a-glance, behavioral profile, impressive things, friction patterns, personalized recommendations)
+   - **Aggregator** — produces the full narrative report (at-a-glance, behavioral profile, impressive things, friction patterns, personalized recommendations). Before generating advice, it reads your project's `opencode.json` and any markdown files listed in its `instructions` field, so recommendations account for what you've already configured and focus on genuine gaps.
 2. **`insights_save_report`** — takes the `InsightReport` JSON, renders the HTML report, saves it to `~/.local/share/opencode/insights/`, and opens it in your browser
