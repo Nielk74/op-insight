@@ -13365,6 +13365,42 @@ function saveAndOpenReport(report) {
 }
 
 // src/synthesize.ts
+import { readFileSync as readFileSync2, existsSync as existsSync3 } from "fs";
+import { join as join4, resolve, dirname } from "path";
+function readUserConfig(directory) {
+  const configPath = join4(directory, "opencode.json");
+  if (!existsSync3(configPath)) return "";
+  let config2;
+  try {
+    config2 = JSON.parse(readFileSync2(configPath, "utf-8"));
+  } catch {
+    return "";
+  }
+  const parts = [];
+  const configSummary = JSON.stringify(config2, null, 2);
+  parts.push(`### opencode.json
+\`\`\`json
+${configSummary}
+\`\`\``);
+  const instructionFiles = config2.instructions ?? [];
+  for (const relPath of instructionFiles) {
+    const absPath = resolve(dirname(configPath), relPath);
+    if (!existsSync3(absPath)) continue;
+    try {
+      const content = readFileSync2(absPath, "utf-8").slice(0, 3e3);
+      parts.push(`### ${relPath}
+${content}`);
+    } catch {
+    }
+  }
+  if (parts.length === 0) return "";
+  return `
+
+## User's existing opencode configuration
+The user already has the following configuration in place. Your advice in featuresToTry and quickWins MUST acknowledge what is already set up \u2014 do not recommend things already configured. Instead, focus on gaps, improvements, and extensions.
+
+${parts.join("\n\n")}`;
+}
 function extractText(parts) {
   return parts.filter((p) => p.type === "text" && p.text).map((p) => p.text).join("\n").trim();
 }
@@ -13415,9 +13451,10 @@ Respond with a JSON array of strings, one per session, same order. No other text
     const wastySessions = facets.filter((f) => f.wasteScore >= 3).length;
     const avgTurns = (facets.reduce((s, f) => s + f.turnDepth, 0) / facets.length).toFixed(1);
     const summaryLines = summaries.map((s, i) => `[${i + 1}] ${s}`).join("\n");
+    const userConfigContext = readUserConfig(directory);
     const aggregatorPrompt = `You are an expert coding workflow analyst producing a rich personal insights report for an opencode user.
 
-Stats: ${facets.length} sessions over ${days} days | avg turns/session: ${avgTurns} | sessions with errors: ${errorSessions} | sessions with high waste: ${wastySessions} | top tools: ${topTools}
+Stats: ${facets.length} sessions over ${days} days | avg turns/session: ${avgTurns} | sessions with errors: ${errorSessions} | sessions with high waste: ${wastySessions} | top tools: ${topTools}${userConfigContext}
 
 Session summaries:
 ${summaryLines}

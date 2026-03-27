@@ -2,8 +2,56 @@
 // Two-agent synthesis pipeline using the opencode client:
 //   1. Summarizer  — one goal-oriented sentence per session
 //   2. Aggregator  — produces the full rich summary (atAGlance + all sections)
+import { readFileSync, existsSync } from 'fs'
+import { join, resolve, dirname } from 'path'
 import type { PluginInput } from '@opencode-ai/plugin'
 import type { ExtendedSessionFacet, InsightReport } from './types.js'
+
+interface OpencodeJson {
+  instructions?: string[]
+  system?: string
+  [key: string]: unknown
+}
+
+/**
+ * Read the user's opencode.json and any markdown files listed in its
+ * `instructions` field. Returns a context block to inject into the aggregator
+ * prompt so advice accounts for what's already configured.
+ */
+function readUserConfig(directory: string): string {
+  const configPath = join(directory, 'opencode.json')
+  if (!existsSync(configPath)) return ''
+
+  let config: OpencodeJson
+  try {
+    config = JSON.parse(readFileSync(configPath, 'utf-8')) as OpencodeJson
+  } catch {
+    return ''
+  }
+
+  const parts: string[] = []
+
+  // Include the raw opencode.json (minus any large fields)
+  const configSummary = JSON.stringify(config, null, 2)
+  parts.push(`### opencode.json\n\`\`\`json\n${configSummary}\n\`\`\``)
+
+  // Read each file listed in `instructions`
+  const instructionFiles = config.instructions ?? []
+  for (const relPath of instructionFiles) {
+    // Paths in opencode.json are relative to the config file's directory
+    const absPath = resolve(dirname(configPath), relPath)
+    if (!existsSync(absPath)) continue
+    try {
+      const content = readFileSync(absPath, 'utf-8').slice(0, 3000) // cap per file
+      parts.push(`### ${relPath}\n${content}`)
+    } catch {
+      // skip unreadable files
+    }
+  }
+
+  if (parts.length === 0) return ''
+  return `\n\n## User's existing opencode configuration\nThe user already has the following configuration in place. Your advice in featuresToTry and quickWins MUST acknowledge what is already set up — do not recommend things already configured. Instead, focus on gaps, improvements, and extensions.\n\n${parts.join('\n\n')}`
+}
 
 function extractText(parts: Array<{ type: string; text?: string }>): string {
   return parts
@@ -84,9 +132,11 @@ Respond with a JSON array of strings, one per session, same order. No other text
 
     const summaryLines = summaries.map((s, i) => `[${i + 1}] ${s}`).join('\n')
 
+    const userConfigContext = readUserConfig(directory)
+
     const aggregatorPrompt = `You are an expert coding workflow analyst producing a rich personal insights report for an opencode user.
 
-Stats: ${facets.length} sessions over ${days} days | avg turns/session: ${avgTurns} | sessions with errors: ${errorSessions} | sessions with high waste: ${wastySessions} | top tools: ${topTools}
+Stats: ${facets.length} sessions over ${days} days | avg turns/session: ${avgTurns} | sessions with errors: ${errorSessions} | sessions with high waste: ${wastySessions} | top tools: ${topTools}${userConfigContext}
 
 Session summaries:
 ${summaryLines}
